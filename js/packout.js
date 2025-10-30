@@ -1,5 +1,4 @@
-// Firestore (no auth), shared for all Packout pages.
-// One doc per pageKey under collection "pages".
+// Firestore (no auth) — one doc per page under collection "pages".
 // Data shape: { ts: number, folders: { [folderName]: [{ name: string, quantity: number }] } }
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
@@ -28,59 +27,69 @@ const pageRef = doc(db, 'pages', pageKey);
 // --- Local working copy of folders map ---
 let folders = {};  // { [folderName]: Array<{name, quantity}> }
 
-// Ensure doc exists once
-(async () => {
-  const snap = await getDoc(pageRef);
-  if (!snap.exists()) {
-    await setDoc(pageRef, { ts: Date.now(), folders: {} }, { merge: true });
-  }
-})().catch(console.error);
+// Bind static handlers before Firestore so UI is responsive even if DB is blocked
+function bindStaticHandlers() {
+  const addBtn = document.getElementById('add-folder');
+  const dlBtn  = document.getElementById('download-json');
 
-// Live updates
-onSnapshot(pageRef, (snap) => {
-  const data = snap.data() || {};
-  folders = data.folders || {};
-  render();
-}, console.error);
+  if (addBtn) {
+    addBtn.onclick = async () => {
+      const name = prompt('New folder name:');
+      if (!name) return;
+      if (!folders[name]) folders[name] = [];
+      render(); // reflect instantly
+      try {
+        await save();
+      } catch (e) {
+        console.error('Save failed:', e);
+        alert('Could not save to Firestore. Check Firestore Rules.');
+      }
+    };
+  }
+
+  if (dlBtn) {
+    dlBtn.onclick = () => {
+      const json = JSON.stringify(folders, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url;
+      a.download = `${pageKey}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+  }
+}
 
 // Save helper
 async function save() {
   await setDoc(pageRef, { ts: Date.now(), folders }, { merge: true });
 }
 
+// Ensure the page doc exists and pull initial data
+async function ensureDocAndLoad() {
+  try {
+    const snap = await getDoc(pageRef);
+    if (!snap.exists()) {
+      await setDoc(pageRef, { ts: Date.now(), folders: {} }, { merge: true });
+      folders = {};
+    } else {
+      const data = snap.data() || {};
+      folders = data.folders || {};
+    }
+  } catch (err) {
+    console.error('Firestore access error:', err);
+    // Keep going — UI is still usable; saves will alert if blocked.
+  }
+}
+
 // UI rendering
 function render() {
   const container = document.getElementById('page-container');
+  if (!container) return;
   container.innerHTML = '';
 
-  // Controls
-  const addBtn = document.getElementById('add-folder');
-  const dlBtn  = document.getElementById('download-json');
-
-  // Add folder
-  addBtn.onclick = async () => {
-    const name = prompt('New folder name:');
-    if (!name) return;
-    if (!folders[name]) folders[name] = [];
-    await save();
-    render(); // reflect instantly
-  };
-
-  // Download JSON
-  dlBtn.onclick = () => {
-    const json = JSON.stringify(folders, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url;
-    a.download = `${pageKey}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  // Render folders
   Object.entries(folders).forEach(([folderName, items]) => {
-    // Folder header
     const fld = document.createElement('div');
     fld.className = 'folder';
 
@@ -100,7 +109,6 @@ function render() {
     addItemBtn.className = 'folder-add';
     fld.appendChild(addItemBtn);
 
-    // Delete folder
     const removeBtn = document.createElement('button');
     removeBtn.textContent = '🗑️';
     removeBtn.className = 'folder-remove';
@@ -108,84 +116,87 @@ function render() {
 
     container.appendChild(fld);
 
-    // Items list
     const list = document.createElement('div');
     list.className = 'folder-items';
     list.style.display = 'block';
     container.appendChild(list);
 
-    // Toggle open/close
+    // Toggle visibility
     arrow.onclick = () => {
       const open = list.style.display === 'block';
       list.style.display = open ? 'none' : 'block';
       arrow.textContent  = open ? '▶' : '▼';
     };
 
+    // Remove folder
+    removeBtn.addEventListener('pointerdown', async (e) => {
+      e.preventDefault();
+      if (!confirm(`Delete folder “${folderName}” and all its items?`)) return;
+      delete folders[folderName];
+      render();
+      try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
+    });
+
     // Add item
     addItemBtn.onclick = async () => {
       items.push({ name: '', quantity: 0 });
-      await save();
       render();
+      try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
     };
 
-    // Render rows
+    // Item rows
     items.forEach((item, idx) => {
       const row = document.createElement('div');
       row.className = 'row';
 
-      // Delete item
       const del = document.createElement('button');
       del.textContent = '🗑️';
       del.classList.add('delete-btn');
       del.addEventListener('pointerdown', async (e) => {
         e.preventDefault();
         items.splice(idx, 1);
-        await save();
         render();
+        try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
       });
       row.appendChild(del);
 
-      // Name
       const nameInput = document.createElement('input');
       nameInput.type = 'text';
       nameInput.value = item.name || '';
       nameInput.placeholder = 'Item name';
       nameInput.onchange = async () => {
         items[idx].name = nameInput.value;
-        await save();
+        try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
       };
       row.appendChild(nameInput);
 
-      // Minus
       const minus = document.createElement('button');
       minus.textContent = '–';
       minus.addEventListener('pointerdown', async (e) => {
         e.preventDefault();
         items[idx].quantity = Math.max(0, (items[idx].quantity || 0) - 1);
         qty.value = items[idx].quantity;
-        await save();
+        try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
       });
       row.appendChild(minus);
 
-      // Quantity
       const qty = document.createElement('input');
       qty.type = 'number';
       qty.min = 0;
       qty.value = item.quantity || 0;
       qty.onchange = async () => {
         items[idx].quantity = parseInt(qty.value, 10) || 0;
-        await save();
+        try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
       };
       row.appendChild(qty);
 
-      // Plus
       const plus = document.createElement('button');
       plus.textContent = '+';
       plus.addEventListener('pointerdown', async (e) => {
         e.preventDefault();
         items[idx].quantity = (items[idx].quantity || 0) + 1;
         qty.value = items[idx].quantity;
-        await save();
+        try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
       });
       row.appendChild(plus);
 
@@ -193,3 +204,29 @@ function render() {
     });
   });
 }
+
+// Initialize
+(async function init() {
+  // 1) Always bind buttons so “Add Folder” works immediately
+  bindStaticHandlers();
+
+  // 2) Show UI once, even before Firestore loads
+  render();
+
+  // 3) Try to load current data / create doc
+  await ensureDocAndLoad();
+  render();
+
+  // 4) Subscribe to live updates (if rules allow)
+  try {
+    onSnapshot(pageRef, (snap) => {
+      const data = snap.data() || {};
+      folders = data.folders || {};
+      render();
+    }, (err) => {
+      console.error('onSnapshot error:', err);
+    });
+  } catch (e) {
+    console.error('Snapshot subscribe failed:', e);
+  }
+})();
