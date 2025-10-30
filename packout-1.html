@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Van Inventory – Packout 1</title>
-  <link rel="stylesheet" href="style.css?v=1" />
+  <title>Packout 1</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
-<body>
+<body data-packout="packout-1">
   <header>
     <h1>Packout 1</h1>
     <p style="font-size:0.9em;">
@@ -15,10 +15,13 @@
     </p>
   </header>
 
-  <button id="add-folder">+ Add Folder</button>
-  <div id="packout-container"></div>
+  <div style="display:flex; gap:8px; align-items:center; margin:8px 0;">
+    <button id="add-folder">+ Add Folder</button>
+    <button id="download-json">⤓ Download JSON</button>
+  </div>
 
-  <!-- IMPORTANT: data-packout must match this page -->
-  <script type="module" src="js/packout.js" data-packout="packout-1"></script>
+  <div id="page-container"></div>
+
+  <script type="module" src="js/packout.js"></script>
 </body>
 </html>

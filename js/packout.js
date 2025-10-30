@@ -1,18 +1,13 @@
-// js/packout.js
-// Van Inventory (Firestore, no auth, no expiry)
+// Firestore (no auth), shared for all Packout pages.
+// One doc per pageKey under collection "pages".
+// Data shape: { ts: number, folders: { [folderName]: [{ name: string, quantity: number }] } }
 
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc,
-  onSnapshot
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+  getFirestore, doc, getDoc, setDoc, onSnapshot
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-// -------------------------------
-// Firebase config (your project)
-// -------------------------------
+// --- Your Firestore config ---
 const firebaseConfig = {
   apiKey: "AIzaSyDRMRiSsu0icqeWuxqaWXs-Ps2-3jS_DOg",
   authDomain: "protech-van-inventory-2025.firebaseapp.com",
@@ -23,206 +18,174 @@ const firebaseConfig = {
   measurementId: "G-Z7XRSJ486Q"
 };
 
-// Init
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
-// Figure out which packout this page is for via the script tag’s data attribute
-const scriptEl  = document.querySelector('script[data-packout]');
-const packoutId = (scriptEl && scriptEl.dataset.packout) ? scriptEl.dataset.packout : "packout-1";
+// --- Page key comes from <body data-packout="packout-1"> etc ---
+const pageKey = (document.body.dataset.packout || 'packout-1').trim();
+const pageRef = doc(db, 'pages', pageKey);
 
-// DOM
-const addFolderBtn = document.getElementById("add-folder");
-const container    = document.getElementById("packout-container");
+// --- Local working copy of folders map ---
+let folders = {};  // { [folderName]: Array<{name, quantity}> }
 
-// Firestore doc path: packouts/{packoutId}
-const docRef = doc(db, "packouts", packoutId);
-
-// Keep track of which folders are open in the UI
-const expandedFolders = new Set();
-
-// Local cache of data: { [folderName]: Array<{name:string, quantity:number}> }
-let packoutData = {};
-
-// -------------------------------------
-// Ensure doc exists, then live-listen
-// -------------------------------------
-(async function init() {
-  try {
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) {
-      await setDoc(docRef, { data: {}, ts: Date.now() });
-    }
-  } catch (e) {
-    console.error("Error ensuring doc exists:", e);
+// Ensure doc exists once
+(async () => {
+  const snap = await getDoc(pageRef);
+  if (!snap.exists()) {
+    await setDoc(pageRef, { ts: Date.now(), folders: {} }, { merge: true });
   }
+})().catch(console.error);
 
-  // Live updates
-  onSnapshot(docRef, (snap) => {
-    const docData = snap.data();
-    packoutData = (docData && docData.data) ? docData.data : {};
-    render(packoutData);
-  });
-})();
+// Live updates
+onSnapshot(pageRef, (snap) => {
+  const data = snap.data() || {};
+  folders = data.folders || {};
+  render();
+}, console.error);
 
-// -------------------------------------
-// Persist full data back to Firestore
-// -------------------------------------
+// Save helper
 async function save() {
-  try {
-    await setDoc(docRef, { data: packoutData, ts: Date.now() }, { merge: true });
-  } catch (e) {
-    console.error("Save failed:", e);
-  }
+  await setDoc(pageRef, { ts: Date.now(), folders }, { merge: true });
 }
 
-// -------------------------------------
-// Add Folder button
-// -------------------------------------
-addFolderBtn.addEventListener("click", () => {
-  const name = prompt("New folder name:");
-  if (!name) return;
-  if (!packoutData[name]) {
-    packoutData[name] = [];
-  }
-  expandedFolders.add(name);
-  render(packoutData);
-  save();
-});
+// UI rendering
+function render() {
+  const container = document.getElementById('page-container');
+  container.innerHTML = '';
 
-// -------------------------------------
-// Render UI
-// -------------------------------------
-function render(data) {
-  container.innerHTML = "";
+  // Controls
+  const addBtn = document.getElementById('add-folder');
+  const dlBtn  = document.getElementById('download-json');
 
-  Object.entries(data).forEach(([folder, items]) => {
-    // Folder header row
-    const fld = document.createElement("div");
-    fld.className = "folder";
+  // Add folder
+  addBtn.onclick = async () => {
+    const name = prompt('New folder name:');
+    if (!name) return;
+    if (!folders[name]) folders[name] = [];
+    await save();
+    render(); // reflect instantly
+  };
 
-    const isExpanded = expandedFolders.has(folder);
+  // Download JSON
+  dlBtn.onclick = () => {
+    const json = JSON.stringify(folders, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `${pageKey}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-    const arrow = document.createElement("span");
-    arrow.className = "arrow";
-    arrow.textContent = isExpanded ? "▼" : "▶";
+  // Render folders
+  Object.entries(folders).forEach(([folderName, items]) => {
+    // Folder header
+    const fld = document.createElement('div');
+    fld.className = 'folder';
+
+    const arrow = document.createElement('span');
+    arrow.className = 'arrow';
+    arrow.textContent = '▼';
     fld.appendChild(arrow);
 
-    const title = document.createElement("span");
-    title.className = "folder-title";
-    title.textContent = folder;
+    const title = document.createElement('span');
+    title.className = 'folder-title';
+    title.textContent = folderName;
     fld.appendChild(title);
 
-    const addBtn = document.createElement("button");
-    addBtn.className = "folder-add";
-    addBtn.title = "Add item to " + folder;
-    addBtn.textContent = "+";
-    fld.appendChild(addBtn);
+    const addItemBtn = document.createElement('button');
+    addItemBtn.textContent = '+';
+    addItemBtn.title = `Add item to ${folderName}`;
+    addItemBtn.className = 'folder-add';
+    fld.appendChild(addItemBtn);
 
-    const removeBtn = document.createElement("button");
-    removeBtn.className = "folder-remove";
-    removeBtn.textContent = "🗑️";
+    // Delete folder
+    const removeBtn = document.createElement('button');
+    removeBtn.textContent = '🗑️';
+    removeBtn.className = 'folder-remove';
     fld.appendChild(removeBtn);
 
     container.appendChild(fld);
 
-    // Items list container
-    const list = document.createElement("div");
-    list.className = "folder-items";
-    list.style.display = isExpanded ? "block" : "none";
+    // Items list
+    const list = document.createElement('div');
+    list.className = 'folder-items';
+    list.style.display = 'block';
     container.appendChild(list);
 
-    // Open/close behavior
-    arrow.addEventListener("click", () => {
-      const showing = list.style.display === "block";
-      if (showing) {
-        list.style.display = "none";
-        arrow.textContent = "▶";
-        expandedFolders.delete(folder);
-      } else {
-        list.style.display = "block";
-        arrow.textContent = "▼";
-        expandedFolders.add(folder);
-      }
-    });
+    // Toggle open/close
+    arrow.onclick = () => {
+      const open = list.style.display === 'block';
+      list.style.display = open ? 'none' : 'block';
+      arrow.textContent  = open ? '▶' : '▼';
+    };
 
-    // Add item to this folder
-    addBtn.addEventListener("click", () => {
-      items.push({ name: "", quantity: 0 });
-      expandedFolders.add(folder);
-      render(packoutData);
-      save();
-    });
+    // Add item
+    addItemBtn.onclick = async () => {
+      items.push({ name: '', quantity: 0 });
+      await save();
+      render();
+    };
 
-    // Delete the whole folder
-    removeBtn.addEventListener("pointerdown", (e) => {
-      e.preventDefault();
-      if (!confirm(`Delete folder “${folder}” and all its items?`)) return;
-      delete packoutData[folder];
-      expandedFolders.delete(folder);
-      render(packoutData);
-      save();
-    });
+    // Render rows
+    items.forEach((item, idx) => {
+      const row = document.createElement('div');
+      row.className = 'row';
 
-    // Render each item row
-    items.forEach((item, i) => {
-      const row = document.createElement("div");
-      row.className = "row";
-
-      // Delete row
-      const del = document.createElement("button");
-      del.textContent = "🗑️";
-      del.classList.add("delete-btn");
-      del.addEventListener("pointerdown", (e) => {
+      // Delete item
+      const del = document.createElement('button');
+      del.textContent = '🗑️';
+      del.classList.add('delete-btn');
+      del.addEventListener('pointerdown', async (e) => {
         e.preventDefault();
-        items.splice(i, 1);
-        render(packoutData);
-        save();
+        items.splice(idx, 1);
+        await save();
+        render();
       });
       row.appendChild(del);
 
       // Name
-      const nameInput = document.createElement("input");
-      nameInput.type = "text";
-      nameInput.placeholder = "Item name";
-      nameInput.value = item.name || "";
-      nameInput.addEventListener("change", () => {
-        items[i].name = nameInput.value;
-        save();
-      });
+      const nameInput = document.createElement('input');
+      nameInput.type = 'text';
+      nameInput.value = item.name || '';
+      nameInput.placeholder = 'Item name';
+      nameInput.onchange = async () => {
+        items[idx].name = nameInput.value;
+        await save();
+      };
       row.appendChild(nameInput);
 
       // Minus
-      const minus = document.createElement("button");
-      minus.textContent = "–";
-      minus.addEventListener("pointerdown", (e) => {
+      const minus = document.createElement('button');
+      minus.textContent = '–';
+      minus.addEventListener('pointerdown', async (e) => {
         e.preventDefault();
-        const qtyInput = row.querySelector('input[type="number"]');
-        item.quantity = Math.max(0, (item.quantity || 0) - 1);
-        qtyInput.value = item.quantity;
-        save();
+        items[idx].quantity = Math.max(0, (items[idx].quantity || 0) - 1);
+        qty.value = items[idx].quantity;
+        await save();
       });
       row.appendChild(minus);
 
       // Quantity
-      const qty = document.createElement("input");
-      qty.type = "number";
+      const qty = document.createElement('input');
+      qty.type = 'number';
       qty.min = 0;
       qty.value = item.quantity || 0;
-      qty.addEventListener("change", () => {
-        items[i].quantity = parseInt(qty.value, 10) || 0;
-        save();
-      });
+      qty.onchange = async () => {
+        items[idx].quantity = parseInt(qty.value, 10) || 0;
+        await save();
+      };
       row.appendChild(qty);
 
       // Plus
-      const plus = document.createElement("button");
-      plus.textContent = "+";
-      plus.addEventListener("pointerdown", (e) => {
+      const plus = document.createElement('button');
+      plus.textContent = '+';
+      plus.addEventListener('pointerdown', async (e) => {
         e.preventDefault();
-        item.quantity = (item.quantity || 0) + 1;
-        qty.value = item.quantity;
-        save();
+        items[idx].quantity = (items[idx].quantity || 0) + 1;
+        qty.value = items[idx].quantity;
+        await save();
       });
       row.appendChild(plus);
 
