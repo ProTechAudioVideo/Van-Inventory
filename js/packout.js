@@ -1,88 +1,273 @@
-/* /style.css */
+// js/packout.js
+// Firestore-backed Packout pages with expand/collapse and per-item status
+// where the selected status can be toggled OFF by tapping again.
 
-/* ===== Base / reset ===== */
-* { box-sizing: border-box; }
-html, body { max-width: 100%; overflow-x: hidden; }
-html { -webkit-text-size-adjust: 100%; }
-body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:16px; }
-h1 { margin:0 0 8px; }
-a { color:#064e3b; }
-button { cursor:pointer; }
-#add-folder, #download-json { padding:6px 10px; margin-right:6px; }
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
+import {
+  getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc
+} from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js';
 
-/* ===== Folder header (caret) ===== */
-.folder {
-  display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600;
-}
-.folder-title { flex:1; user-select:none; }
-.caret {
-  width:26px; height:26px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;
-  display:inline-flex; align-items:center; justify-content:center; line-height:1; font-size:16px;
-}
-.caret:focus { outline:2px solid #0ea5e9; outline-offset:2px; }
-.delete-btn {
-  background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; border-radius:4px;
-  padding:4px 6px; font-size:.9rem;
-}
+/* Firebase config — project: protech-van-inventory-2025 */
+const firebaseConfig = {
+  apiKey: "AIzaSyDRMRiSsu0icqeWuxqaWXs-Ps2-3jS_DOg",
+  authDomain: "protech-van-inventory-2025.firebaseapp.com",
+  projectId: "protech-van-inventory-2025",
+  storageBucket: "protech-van-inventory-2025.appspot.com",
+  appId: "1:818777808639:web:demo"
+};
 
-/* ===== Items list ===== */
-.folder-items { margin:8px 0 16px 34px; }   /* default (desktop) */
-.folder.collapsed + .folder-items { display:none; }
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
 
-/* ===== Item rows ===== */
-.row { display:flex; flex-direction:column; gap:6px; margin:8px 0; }
+// DOM
+const addFolderBtn = document.getElementById('add-folder');
+const downloadBtn  = document.getElementById('download-json');
+const container =
+  document.getElementById('packout-container') ||
+  document.getElementById('page-container');
 
-/* --- main line: trash | name | - | qty | + --- */
-.row-main { display:flex; align-items:center; gap:8px; flex-wrap:nowrap; }
-.row-main > * { flex: 0 0 auto; }
-
-.row input[type="text"]{
-  min-width:0;           /* allow shrink on small screens (prevents overflow) */
-  flex:1 1 auto;
-  padding:6px 8px;
+if (!container) {
+  throw new Error('Missing container: include <div id="packout-container"></div> or id="page-container".');
 }
 
-input[type="number"]{
-  width:2.8em;           /* desktop; tightened on iPhone below */
-  text-align:center;
-  -moz-appearance:textfield;
-  appearance:textfield;
-  padding:6px 6px;
+// Page/collection key
+const pageKey = (document.body?.dataset?.packout) ||
+  (document.title || 'packout').toLowerCase().replace(/\s+/g, '-');
+
+const colRef = collection(db, pageKey);
+
+// Collapse state (local only)
+const collapseKey = (id) => `packout:${pageKey}:collapsed:${id}`;
+const getCollapsed = (id) => localStorage.getItem(collapseKey(id)) === '1';
+const setCollapsed = (id, val) => {
+  if (val) localStorage.setItem(collapseKey(id), '1');
+  else localStorage.removeItem(collapseKey(id));
+};
+
+// Helpers
+const slugify = (s) => (s || '')
+  .toLowerCase().trim()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/(^-|-$)/g, '') || ('folder-' + Date.now());
+
+async function loadAll() {
+  const out = {};
+  const snap = await getDocs(colRef);
+  snap.forEach(d => out[d.id] = d.data());
+  return out;
 }
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
-
-.row button { padding:4px 8px; }
-
-/* ===== Status row (under main line) ===== */
-.status-bar { display:flex; gap:6px; flex-wrap:wrap; padding-left:0; }
-.status-btn {
-  border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; border-radius:4px;
-  padding:4px 10px; font-size:.8rem;
+async function ensureFolder(id, data) {
+  await setDoc(doc(colRef, id), data, { merge: true });
 }
-.status-btn[aria-pressed="true"] { font-weight:700; }
-.status-btn.full[aria-pressed="true"]  { background:#dcfce7; border-color:#22c55e; color:#14532d; }
-.status-btn.mid[aria-pressed="true"]   { background:#fef9c3; border-color:#eab308; color:#713f12; }
-.status-btn.low[aria-pressed="true"]   { background:#ffedd5; border-color:#f97316; color:#7c2d12; }
-.status-btn.empty[aria-pressed="true"] { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
-
-/* ===== iPhone portrait fine-tuning (matches your "before" look) ===== */
-@media (max-width: 430px) {
-  body { margin:12px; }
-
-  /* Slightly tighter caret + indent so rows fit without horizontal scroll */
-  .caret { width:22px; height:22px; }
-  .folder-items { margin-left:18px; }   /* was 34px; closer to your original */
-
-  /* Keep everything on one line without wrapping */
-  .row-main { gap:6px; }
-
-  /* Make qty box slimmer (iOS likes to make it wide) */
-  input[type="number"] { width:2.35em; padding:6px 4px; }
-
-  /* Keep status buttons tidy but readable */
-  .status-btn { padding:3px 8px; font-size:.75rem; }
+async function saveItems(folderId, items) {
+  await updateDoc(doc(colRef, folderId), { items });
+}
+async function deleteFolder(folderId) {
+  await deleteDoc(doc(colRef, folderId));
 }
 
-/* Extra guard against phantom overflow from rounded borders/shadows */
-.container, .folder, .row, .row-main, .status-bar { max-width: 100%; }
+// Status helpers
+const STATUS_ORDER = ['empty', 'low', 'mid', 'full'];
+const STATUS_LABEL = { empty: 'Empty', low: 'Low', mid: 'Mid', full: 'Full' };
+
+// Render
+function render(data) {
+  container.innerHTML = '';
+
+  Object.entries(data).forEach(([folderId, folder]) => {
+    const isCollapsed = getCollapsed(folderId);
+
+    const header = document.createElement('div');
+    header.className = 'folder' + (isCollapsed ? ' collapsed' : '');
+
+    const caret = document.createElement('button');
+    caret.className = 'caret';
+    caret.setAttribute('aria-label', isCollapsed ? 'Expand folder' : 'Collapse folder');
+    caret.setAttribute('aria-expanded', (!isCollapsed).toString());
+    caret.textContent = isCollapsed ? '▸' : '▾';
+    header.appendChild(caret);
+
+    const title = document.createElement('span');
+    title.className = 'folder-title';
+    title.textContent = folder.name || '(untitled)';
+    header.appendChild(title);
+
+    const addItemBtn = document.createElement('button');
+    addItemBtn.textContent = '+';
+    addItemBtn.title = 'Add item';
+    addItemBtn.addEventListener('click', async () => {
+      const items = Array.isArray(folder.items) ? folder.items.slice() : [];
+      // Default: NO status selected initially (no 'status' field).
+      items.push({ name: '', qty: 0 });
+      await saveItems(folderId, items);
+      await init();
+    });
+    header.appendChild(addItemBtn);
+
+    const delFolderBtn = document.createElement('button');
+    delFolderBtn.textContent = 'Delete';
+    delFolderBtn.className = 'delete-btn';
+    delFolderBtn.addEventListener('click', async () => {
+      if (confirm('Delete this folder and all its items?')) {
+        await deleteFolder(folderId);
+        await init();
+      }
+    });
+    header.appendChild(delFolderBtn);
+
+    container.appendChild(header);
+
+    const list = document.createElement('div');
+    list.className = 'folder-items';
+    list.style.display = isCollapsed ? 'none' : '';
+    container.appendChild(list);
+
+    function toggle() {
+      const newCollapsed = list.style.display !== 'none';
+      list.style.display = newCollapsed ? 'none' : '';
+      header.classList.toggle('collapsed', newCollapsed);
+      caret.textContent = newCollapsed ? '▸' : '▾';
+      caret.setAttribute('aria-label', newCollapsed ? 'Expand folder' : 'Collapse folder');
+      caret.setAttribute('aria-expanded', (!newCollapsed).toString());
+      setCollapsed(folderId, newCollapsed);
+    }
+    caret.addEventListener('click', toggle);
+    title.addEventListener('click', toggle);
+
+    const items = Array.isArray(folder.items) ? folder.items.slice() : [];
+
+    const pushRow = (item, index) => {
+      // Normalize legacy values to "no selection" unless valid.
+      const active = STATUS_ORDER.includes(item.status) ? item.status : null;
+
+      const row = document.createElement('div');
+      row.className = 'row';
+
+      // Line 1: delete, name, qty controls
+      const main = document.createElement('div');
+      main.className = 'row-main';
+
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '🗑️';
+      delBtn.className = 'delete-btn';
+      delBtn.addEventListener('click', async () => {
+        items.splice(index, 1);
+        await saveItems(folderId, items);
+        await init();
+      });
+      main.appendChild(delBtn);
+
+      const nameI = document.createElement('input');
+      nameI.type = 'text';
+      nameI.placeholder = 'Item name';
+      nameI.value = item.name || '';
+      nameI.addEventListener('change', async () => {
+        items[index].name = nameI.value;
+        await saveItems(folderId, items);
+      });
+      main.appendChild(nameI);
+
+      const minus = document.createElement('button');
+      minus.textContent = '−';
+      minus.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const v = Math.max(0, (item.qty || 0) - 1);
+        items[index].qty = v;
+        qty.value = v;
+        await saveItems(folderId, items);
+      });
+      main.appendChild(minus);
+
+      const qty = document.createElement('input');
+      qty.type = 'number';
+      qty.min = '0';
+      qty.value = item.qty || 0;
+      qty.addEventListener('change', async () => {
+        items[index].qty = Math.max(0, parseInt(qty.value || '0', 10));
+        qty.value = items[index].qty;
+        await saveItems(folderId, items);
+      });
+      main.appendChild(qty);
+
+      const plus = document.createElement('button');
+      plus.textContent = '+';
+      plus.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const v = (item.qty || 0) + 1;
+        items[index].qty = v;
+        qty.value = v;
+        await saveItems(folderId, items);
+      });
+      main.appendChild(plus);
+
+      row.appendChild(main);
+
+      // Line 2: status buttons (one-hot, but can toggle off the active one)
+      const statusBar = document.createElement('div');
+      statusBar.className = 'status-bar';
+
+      const setStatus = async (kind) => {
+        const current = STATUS_ORDER.includes(items[index].status) ? items[index].status : null;
+        const next = (current === kind) ? null : kind; // toggle off if same button tapped
+        if (next) {
+          items[index].status = next;
+        } else {
+          // remove field to represent "no selection"
+          delete items[index].status;
+        }
+        await saveItems(folderId, items);
+        await init(); // re-render to update button highlights
+      };
+
+      STATUS_ORDER.forEach(kind => {
+        const btn = document.createElement('button');
+        btn.className = `status-btn ${kind}`;
+        const pressed = active === kind;
+        btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+        btn.textContent = STATUS_LABEL[kind];
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await setStatus(kind);
+        });
+        statusBar.appendChild(btn);
+      });
+
+      row.appendChild(statusBar);
+      list.appendChild(row);
+    };
+
+    items.forEach(pushRow);
+  });
+}
+
+// Controls
+addFolderBtn?.addEventListener('click', async () => {
+  const name = prompt('Folder name?');
+  if (!name) return;
+  const id = slugify(name);
+  await ensureFolder(id, { name, items: [] });
+  setCollapsed(id, false);
+  await init();
+});
+
+downloadBtn?.addEventListener('click', async () => {
+  const data = await loadAll();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${pageKey}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+// Boot
+async function init() {
+  try {
+    const data = await loadAll();
+    render(data);
+  } catch (err) {
+    console.error('Firestore load error:', err);
+    container.innerHTML = '<p style="color:#900">Could not load data. Verify Firebase config and Firestore rules.</p>';
+  }
+}
+init();

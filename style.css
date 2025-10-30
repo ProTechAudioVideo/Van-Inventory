@@ -11,7 +11,9 @@ button { cursor:pointer; }
 #add-folder, #download-json { padding:6px 10px; margin-right:6px; }
 
 /* ===== Folder header (caret) ===== */
-.folder { display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600; }
+.folder {
+  display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600;
+}
 .folder-title { flex:1; user-select:none; }
 .caret {
   width:26px; height:26px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;
@@ -24,45 +26,63 @@ button { cursor:pointer; }
 }
 
 /* ===== Items list ===== */
-.folder-items { margin:8px 0 16px 34px; }
+.folder-items { margin:8px 0 16px 34px; }   /* default (desktop) */
 .folder.collapsed + .folder-items { display:none; }
 
-/* ===== Item row =====
-   Grid lets us place the status bar *only* under the NAME column and center it. */
-.row {
-  display: grid;
-  grid-template-columns: auto 1fr auto auto auto; /* trash | name | - | qty | + */
-  column-gap: 8px;
-  row-gap: 6px;
-  align-items: center;
-  margin: 8px 0;
-}
+/* ===== Item rows ===== */
+.row { display:flex; flex-direction:column; gap:6px; margin:8px 0; }
 
-/* First line: trash | name | - | qty | +  (kept as a flex row spanning all columns) */
-.row-main {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-}
+/* --- main line: trash | name | - | qty | + --- */
+.row-main { display:flex; align-items:center; gap:8px; flex-wrap:nowrap; }
 .row-main > * { flex: 0 0 auto; }
 
 .row input[type="text"]{
-  min-width: 0;    /* allow shrink on small screens */
-  flex: 1 1 auto;
-  padding: 6px 8px;
+  min-width:0;           /* allow shrink on small screens (prevents overflow) */
+  flex:1 1 auto;
+  padding:6px 8px;
 }
 
-/* Qty field */
 input[type="number"]{
-  width: 2.8em;    /* tightened on iPhone below */
-  text-align: center;
-  -moz-appearance: textfield;
-  appearance: textfield;
-  padding: 6px 6px;
+  width:2.8em;           /* desktop; tightened on iPhone below */
+  text-align:center;
+  -moz-appearance:textfield;
+  appearance:textfield;
+  padding:6px 6px;
 }
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
 
-.row but
+.row button { padding:4px 8px; }
+
+/* ===== Status row (under main line) ===== */
+.status-bar { display:flex; gap:6px; flex-wrap:wrap; padding-left:0; }
+.status-btn {
+  border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; border-radius:4px;
+  padding:4px 10px; font-size:.8rem;
+}
+.status-btn[aria-pressed="true"] { font-weight:700; }
+.status-btn.full[aria-pressed="true"]  { background:#dcfce7; border-color:#22c55e; color:#14532d; }
+.status-btn.mid[aria-pressed="true"]   { background:#fef9c3; border-color:#eab308; color:#713f12; }
+.status-btn.low[aria-pressed="true"]   { background:#ffedd5; border-color:#f97316; color:#7c2d12; }
+.status-btn.empty[aria-pressed="true"] { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
+
+/* ===== iPhone portrait fine-tuning (matches your "before" look) ===== */
+@media (max-width: 430px) {
+  body { margin:12px; }
+
+  /* Slightly tighter caret + indent so rows fit without horizontal scroll */
+  .caret { width:22px; height:22px; }
+  .folder-items { margin-left:18px; }   /* was 34px; closer to your original */
+
+  /* Keep everything on one line without wrapping */
+  .row-main { gap:6px; }
+
+  /* Make qty box slimmer (iOS likes to make it wide) */
+  input[type="number"] { width:2.35em; padding:6px 4px; }
+
+  /* Keep status buttons tidy but readable */
+  .status-btn { padding:3px 8px; font-size:.75rem; }
+}
+
+/* Extra guard against phantom overflow from rounded borders/shadows */
+.container, .folder, .row, .row-main, .status-bar { max-width: 100%; }
