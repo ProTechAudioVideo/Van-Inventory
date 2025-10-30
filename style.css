@@ -24,9 +24,7 @@ button { cursor:pointer; }
 #add-folder { display:inline-flex; } /* JS hides this when locked */
 
 /* ===== Folder header (caret) ===== */
-.folder {
-  display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600;
-}
+.folder { display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600; }
 .folder-title { flex:1; user-select:none; }
 
 /* Editable folder title (unlocked mode) */
@@ -96,6 +94,27 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
   background:#fff;
 }
 
+/* ===== Length input and display ===== */
+.len-group { display:flex; align-items:center; gap:4px; }
+.len-input {
+  width:3.8em;              /* a touch wider than qty */
+  text-align:center;
+  -moz-appearance:textfield;
+  appearance:textfield;
+  padding:6px 6px;
+}
+.len-input::-webkit-outer-spin-button,
+.len-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+.unit { font-size:.9rem; color:#334155; }
+.len-text {
+  min-width:max(3.2em, 2.35em);
+  text-align:center;
+  padding:6px 6px;
+  border:1px solid #e5e7eb;
+  border-radius:4px;
+  background:#fff;
+}
+
 /* Buttons in rows */
 .row button { padding:4px 8px; }
 
@@ -127,7 +146,7 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 .status-chip.empty { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
 .status-chip.none  { background:#f1f5f9; border-color:#cbd5e1; color:#475569; }
 
-/* Convert buttons (unlocked only) */
+/* Convert/type cycle button (unlocked only) */
 .convert-btn {
   border:1px dashed #94a3b8;
   background:#f8fafc;
@@ -164,9 +183,10 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 @media (max-width: 430px) {
   body { margin:12px; }
   .caret { width:22px; height:22px; }
-  .folder-items { margin-left:18px; }   /* tighter indent to avoid overflow */
+  .folder-items { margin-left:18px; }
   .row-main { gap:6px; }
   input[type="number"] { width:2.35em; padding:6px 4px; }
+  .len-input { width:3.4em; padding:6px 4px; }
   .status-btn { padding:3px 8px; font-size:.75rem; }
 }
 

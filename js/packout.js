@@ -1,6 +1,6 @@
 // js/packout.js
-// Lock/Unlock view, qty|status items, add-item popover, per-item convert,
-// inline folder rename with duplicate checks and doc-ID change (slug) on save.
+// Lock/Unlock view, qty|status|length items, add-item popover chooser,
+// per-item type cycle (keeps prior values), inline folder rename, expand/collapse.
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import {
@@ -20,8 +20,8 @@ const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
 // DOM refs
-const addFolderBtn = document.getElementById('add-folder');
-const downloadBtn  = document.getElementById('download-json');
+const addFolderBtn  = document.getElementById('add-folder');
+const downloadBtn   = document.getElementById('download-json');
 const toggleLockBtn = document.getElementById('toggle-lock');
 const container =
   document.getElementById('packout-container') ||
@@ -35,13 +35,10 @@ const pageKey = (document.body?.dataset?.packout) ||
 
 const colRef = collection(db, pageKey);
 
-// Collapse state
-const collapseKey = (id) => `packout:${pageKey}:collapsed:${id}`;
-const getCollapsed = (id) => localStorage.getItem(collapseKey(id)) === '1';
-const setCollapsed = (id, val) => {
-  if (val) localStorage.setItem(collapseKey(id), '1');
-  else localStorage.removeItem(collapseKey(id));
-};
+// Collapse state (local only)
+const collapseKey   = (id) => `packout:${pageKey}:collapsed:${id}`;
+const getCollapsed  = (id) => localStorage.getItem(collapseKey(id)) === '1';
+const setCollapsed  = (id, val) => { if (val) localStorage.setItem(collapseKey(id), '1'); else localStorage.removeItem(collapseKey(id)); };
 
 // Lock state: default LOCKED, no persistence
 let locked = true;
@@ -59,6 +56,10 @@ function setLockUI() {
 const STATUS_ORDER = ['empty', 'low', 'mid', 'full'];
 const STATUS_LABEL = { empty: 'Empty', low: 'Low', mid: 'Mid', full: 'Full' };
 
+const KIND_ORDER = ['qty', 'status', 'length'];
+const KIND_LABEL = { qty: 'Qty', status: 'Status', length: 'Length' };
+const nextKind = (k) => KIND_ORDER[(KIND_ORDER.indexOf(k) + 1) % KIND_ORDER.length];
+
 const slugify = (s) => (s || '')
   .toLowerCase().trim()
   .replace(/[^a-z0-9]+/g, '-')
@@ -75,7 +76,7 @@ async function ensureFolder(id, data) { await setDoc(doc(colRef, id), data, { me
 async function saveItems(folderId, items) { await updateDoc(doc(colRef, folderId), { items }); }
 async function deleteFolder(folderId) { await deleteDoc(doc(colRef, folderId)); }
 
-// Add-item popover (from your current build)
+// Add-item popover
 let openPopover = null;
 function showAddPopover(anchorEl, onPick) {
   closePopover();
@@ -85,6 +86,7 @@ function showAddPopover(anchorEl, onPick) {
   pop.innerHTML = `
     <button class="popover-item" data-kind="qty">➕ Quantity item</button>
     <button class="popover-item" data-kind="status">🏷️ Status item</button>
+    <button class="popover-item" data-kind="length">📏 Length item</button>
   `;
   document.body.appendChild(pop);
   const r = anchorEl.getBoundingClientRect();
@@ -93,15 +95,12 @@ function showAddPopover(anchorEl, onPick) {
   requestAnimationFrame(() => {
     pop.style.left = `${window.scrollX + r.right - pop.offsetWidth}px`;
   });
-  const onDocClick = (e) => {
-    if (!pop.contains(e.target) && e.target !== anchorEl) closePopover();
-  };
+  const onDocClick = (e) => { if (!pop.contains(e.target) && e.target !== anchorEl) closePopover(); };
   document.addEventListener('click', onDocClick, { capture: true });
   pop.addEventListener('click', (e) => {
     const btn = e.target.closest('.popover-item');
     if (!btn) return;
-    const kind = btn.dataset.kind;
-    onPick(kind);
+    onPick(btn.dataset.kind);
     closePopover();
   });
   openPopover = { pop, onDocClick };
@@ -118,62 +117,38 @@ function closePopover() {
 function startRenameFolder(folderId, folderData, titleSpan) {
   if (locked) return;
 
-  // Build inline input
   const input = document.createElement('input');
   input.type = 'text';
   input.className = 'folder-title-input';
   input.value = folderData.name || '';
   input.setAttribute('aria-label', 'Edit folder name');
 
-  // Swap in DOM
   titleSpan.style.display = 'none';
   titleSpan.insertAdjacentElement('afterend', input);
-  input.focus();
-  input.select();
+  input.focus(); input.select();
 
-  const cleanup = () => {
-    input.remove();
-    titleSpan.style.display = '';
-  };
+  const cleanup = () => { input.remove(); titleSpan.style.display = ''; };
 
   const commit = async () => {
     const newName = (input.value || '').trim();
     const oldName = (folderData.name || '').trim();
-    if (!newName) { // reject empty
-      cleanup();
-      return;
-    }
-    // If unchanged, just bail
-    if (newName === oldName) {
-      cleanup();
-      return;
-    }
+    if (!newName) { cleanup(); return; }
+    if (newName === oldName) { cleanup(); return; }
 
-    // Duplicate check (case-insensitive by name)
     const all = await loadAll();
     const dup = Object.entries(all).some(([id, f]) =>
       id !== folderId && (f?.name || '').trim().toLowerCase() === newName.toLowerCase()
     );
-    if (dup) {
-      alert('That folder name is already in use.');
-      input.focus(); input.select();
-      return;
-    }
+    if (dup) { alert('That folder name is already in use.'); input.focus(); input.select(); return; }
 
-    // Determine target ID
     const newId = slugify(newName);
-
     try {
       if (newId === folderId) {
-        // Same ID: update only the name
         await ensureFolder(folderId, { name: newName });
       } else {
-        // Migrate doc to new ID so JSON keys reflect the new name
         const payload = { ...folderData, name: newName };
         await setDoc(doc(colRef, newId), payload, { merge: false });
         await deleteDoc(doc(colRef, folderId));
-
-        // Preserve collapsed state
         if (getCollapsed(folderId)) setCollapsed(newId, true);
         localStorage.removeItem(collapseKey(folderId));
       }
@@ -186,7 +161,6 @@ function startRenameFolder(folderId, folderData, titleSpan) {
   };
 
   const cancel = () => cleanup();
-
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') { e.preventDefault(); commit(); }
     else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
@@ -220,12 +194,8 @@ function render(data) {
 
     if (!locked) {
       title.title = 'Click to rename';
-      title.addEventListener('click', (e) => {
-        e.stopPropagation(); // don’t toggle collapse
-        startRenameFolder(folderId, folder, title);
-      });
+      title.addEventListener('click', (e) => { e.stopPropagation(); startRenameFolder(folderId, folder, title); });
     } else {
-      // In locked mode, clicking title toggles collapse (in addition to caret)
       title.addEventListener('click', () => toggleCollapse());
     }
 
@@ -239,8 +209,9 @@ function render(data) {
         e.stopPropagation();
         showAddPopover(addItemBtn, async (kind) => {
           const items = Array.isArray(folder.items) ? folder.items.slice() : [];
-          if (kind === 'status') items.push({ kind: 'status', name: '' });
-          else items.push({ kind: 'qty', name: '', qty: 0 });
+          if (kind === 'status')      items.push({ kind: 'status', name: '' });
+          else if (kind === 'length') items.push({ kind: 'length', name: '' });        // lengthFt unset (shows —)
+          else                        items.push({ kind: 'qty',    name: '', qty: 0 }); // default qty 0
           await saveItems(folderId, items);
           await init();
         });
@@ -282,8 +253,10 @@ function render(data) {
     const items = Array.isArray(folder.items) ? folder.items.slice() : [];
 
     const normalizeKind = (item) => {
-      if (item.kind === 'qty' || item.kind === 'status') return item.kind;
-      return STATUS_ORDER.includes(item.status) ? 'status' : 'qty';
+      if (item.kind === 'qty' || item.kind === 'status' || item.kind === 'length') return item.kind;
+      if (STATUS_ORDER.includes(item.status)) return 'status';
+      if (typeof item.lengthFt === 'number')  return 'length';
+      return 'qty';
     };
 
     const pushRow = (item, index) => {
@@ -299,205 +272,3 @@ function render(data) {
 
       if (!locked) {
         const delBtn = document.createElement('button');
-        delBtn.textContent = '🗑️';
-        delBtn.className = 'delete-btn';
-        delBtn.title = 'Delete item';
-        delBtn.addEventListener('click', async () => {
-          items.splice(index, 1);
-          await saveItems(folderId, items);
-          await init();
-        });
-        main.appendChild(delBtn);
-      }
-
-      // Name: input (unlocked) or static (locked)
-      if (locked) {
-        const nameText = document.createElement('span');
-        nameText.className = 'name-text';
-        nameText.textContent = item.name && item.name.trim() ? item.name : '(no name)';
-        main.appendChild(nameText);
-      } else {
-        const nameI = document.createElement('input');
-        nameI.type = 'text';
-        nameI.placeholder = 'Item name';
-        nameI.value = item.name || '';
-        nameI.addEventListener('change', async () => {
-          items[index].name = nameI.value;
-          await saveItems(folderId, items);
-        });
-        main.appendChild(nameI);
-      }
-
-      // Right side depends on kind + lock
-      if (kind === 'qty') {
-        if (locked) {
-          const qtyText = document.createElement('span');
-          qtyText.className = 'qty-text';
-          qtyText.textContent = String(item.qty ?? 0);
-          main.appendChild(qtyText);
-        } else {
-          const minus = document.createElement('button');
-          minus.textContent = '−';
-          minus.title = 'Decrement';
-          minus.addEventListener('click', async (e) => {
-            e.preventDefault();
-            const v = Math.max(0, (item.qty || 0) - 1);
-            items[index].qty = v;
-            qty.value = v;
-            await saveItems(folderId, items);
-          });
-          main.appendChild(minus);
-
-          const qty = document.createElement('input');
-          qty.type = 'number';
-          qty.min = '0';
-          qty.value = item.qty || 0;
-          qty.addEventListener('change', async () => {
-            items[index].qty = Math.max(0, parseInt(qty.value || '0', 10));
-            qty.value = items[index].qty;
-            await saveItems(folderId, items);
-          });
-          main.appendChild(qty);
-
-          const plus = document.createElement('button');
-          plus.textContent = '+';
-          plus.title = 'Increment';
-          plus.addEventListener('click', async (e) => {
-            e.preventDefault();
-            const v = (item.qty || 0) + 1;
-            items[index].qty = v;
-            qty.value = v;
-            await saveItems(folderId, items);
-          });
-          main.appendChild(plus);
-
-          // Convert control
-          if (!locked) {
-            const convert = document.createElement('button');
-            convert.className = 'convert-btn';
-            convert.title = 'Convert to status item';
-            convert.textContent = '→ Status';
-            convert.addEventListener('click', async () => {
-              delete items[index].qty;
-              items[index].kind = 'status';
-              await saveItems(folderId, items);
-              await init();
-            });
-            main.appendChild(convert);
-          }
-        }
-      } else { // kind === 'status'
-        if (locked) {
-          const chip = document.createElement('span');
-          chip.className = `status-chip ${statusActive || 'none'}`;
-          chip.textContent = statusActive ? (STATUS_LABEL[statusActive] || statusActive) : '—';
-          main.appendChild(chip);
-        } else {
-          const statusBar = document.createElement('div');
-          statusBar.className = 'status-bar';
-
-          const setStatus = async (k) => {
-            const current = STATUS_ORDER.includes(items[index].status) ? items[index].status : null;
-            const next = (current === k) ? null : k; // toggle off if same
-            if (next) items[index].status = next; else delete items[index].status;
-            await saveItems(folderId, items);
-            await init();
-          };
-
-          STATUS_ORDER.forEach(k => {
-            const btn = document.createElement('button');
-            btn.className = `status-btn ${k}`;
-            const pressed = statusActive === k;
-            btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
-            btn.textContent = STATUS_LABEL[k];
-            btn.addEventListener('click', async (e) => {
-              e.preventDefault();
-              await setStatus(k);
-            });
-            statusBar.appendChild(btn);
-          });
-
-          main.appendChild(statusBar);
-
-          // Convert control
-          const convert = document.createElement('button');
-          convert.className = 'convert-btn';
-          convert.title = 'Convert to quantity item';
-          convert.textContent = '→ Qty';
-          convert.addEventListener('click', async () => {
-            delete items[index].status;
-            items[index].kind = 'qty';
-            items[index].qty = 0;
-            await saveItems(folderId, items);
-            await init();
-          });
-          main.appendChild(convert);
-        }
-      }
-
-      row.appendChild(main);
-      list.appendChild(row);
-    };
-
-    items.forEach(pushRow);
-  });
-}
-
-// Controls
-addFolderBtn?.addEventListener('click', async () => {
-  if (locked) return;
-  const name = prompt('Folder name?');
-  if (!name) return;
-  const clean = name.trim();
-  if (!clean) return;
-
-  // Prevent duplicate names
-  const all = await loadAll();
-  const dup = Object.values(all).some(f => (f?.name || '').trim().toLowerCase() === clean.toLowerCase());
-  if (dup) { alert('That folder name is already in use.'); return; }
-
-  const id = slugify(clean);
-  if (all[id]) { alert('A folder with a similar ID already exists. Try a different name.'); return; }
-
-  await ensureFolder(id, { name: clean, items: [] });
-  setCollapsed(id, false);
-  await init();
-});
-
-downloadBtn?.addEventListener('click', async () => {
-  const data = await loadAll();
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${pageKey}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-});
-
-toggleLockBtn?.addEventListener('click', () => {
-  locked = !locked;
-  setLockUI();
-  init();
-  closePopover();
-});
-
-// Always lock on navigation away
-window.addEventListener('beforeunload', () => {
-  locked = true;
-  setLockUI();
-  closePopover();
-});
-
-// Boot
-async function init() {
-  try {
-    const data = await loadAll();
-    render(data);
-  } catch (err) {
-    console.error('Firestore load error:', err);
-    container.innerHTML = '<p style="color:#900">Could not load data. Verify Firebase config and Firestore rules.</p>';
-  }
-}
-
-setLockUI();
-init();
