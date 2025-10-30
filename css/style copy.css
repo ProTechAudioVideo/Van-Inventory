@@ -1,266 +1,48 @@
-/* ────────────────────────────────────────────────────────────────────────────
-   Base styles
-───────────────────────────────────────────────────────────────────────────── */
-body {
-  font-family: sans-serif;
-  margin: 10px;
-}
+/* Basic layout */
+body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:16px; }
+h1 { margin:0 0 8px; }
+a { color:#064e3b; }
+button { cursor:pointer; }
+input[type="number"] { width:3.5em; }
 
-header h1 {
-  margin-bottom: 0;
-}
+/* Header controls */
+#add-folder, #download-json { padding:6px 10px; margin-right:6px; }
 
-main#inventory {
-  margin: 20px 0;
-}
-
-/* (You can remove this if you don't want it globally)
-button {
-  padding: 6px 8px;
-}
-*/
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Row layout
-───────────────────────────────────────────────────────────────────────────── */
-.row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 12px;
-  overflow: hidden; /* ensure children stay within the row */
-  padding: 4px 0;   /* optional extra breathing room */
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Delete‐button styling
-───────────────────────────────────────────────────────────────────────────── */
-.delete-btn {
-  margin-right: 4px;
-  background: #c00;
-  color: #fff;
-  border-color: #900;
-  flex: 0 0 auto;
-  min-width: 40px;
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
-   General button styling
-───────────────────────────────────────────────────────────────────────────── */
-.row button {
-  padding: 6px 10px;
-  font-size: 1rem;
-  cursor: pointer;
-  background: #fff;
-  border: 1px solid #888;
-  border-radius: 4px;
-  flex: 0 0 auto;
-  min-width: 40px;
-  touch-action: manipulation;
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Desktop text & number inputs
-───────────────────────────────────────────────────────────────────────────── */
-.row input[type="text"] {
-  flex: 1 1 auto;           /* take remaining space */
-  max-width: 150px;
-  padding: 6px;
-  box-sizing: border-box;
-}
-
-.row input[type="number"] {
-  flex: 0 0 50px;           /* fixed 50px width on desktop */
-  max-width: 50px;
-  text-align: center;
-  padding: 6px;
-  box-sizing: border-box;
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
-   EXP field (to the right of +/-)
-   - Input accepts MM-YY / MM-DD-YY (UI only; JS saves canonical ISO)
-───────────────────────────────────────────────────────────────────────────── */
-.exp-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 8px;         /* spacing after the + button */
-}
-
-.exp-label {
-  font-size: 0.85em;
-  opacity: 0.8;
-  letter-spacing: 0.5px;
-}
-
-.exp-input {
-  width: 9ch;               /* fits MM-DD-YY comfortably */
-  min-width: 7ch;           /* also fine for MM-YY */
-  padding: 6px 8px;
-  box-sizing: border-box;
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Fill-level buttons (Empty / Half / Full)
-───────────────────────────────────────────────────────────────────────────── */
-.level-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 6px;              /* space after +/- */
-  flex: 0 0 auto;
-}
-
-.level-btn {
-  padding: 6px 8px;
-  border: 1px solid #888;
-  background: #fff;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  line-height: 1;
-  cursor: pointer;
-  user-select: none;
-  min-width: 3.8ch;              /* compact; 3 side-by-side ≈ exp width */
-  text-align: center;
-}
-
-/* Active (selected) state base */
-.level-btn.active {
-  font-weight: 700;
-  box-shadow: 0 0 0 2px rgba(0,0,0,0.05) inset;
-}
-
-/* Color coding for each state when active */
-.level-btn[data-level="empty"].active {
-  background: #ffe8e8;           /* light red */
-  border-color: #e53935;
-  color: #962a2a;
-}
-
-.level-btn[data-level="half"].active {
-  background: #fff8b3;           /* bright, non-orange yellow */
-  border-color: #ffea00;
-  color: #6b6b00;
-}
-
-.level-btn[data-level="full"].active {
-  background: #e8ffe9;           /* light green */
-  border-color: #28a745;
-  color: #1e7a32;
-}
-
-/* Tiny responsiveness tweak so the group stays tidy on small screens */
-@media (max-width: 600px) {
-  .level-btn {
-    padding: 5px 6px;
-    font-size: 0.8rem;
-    min-width: 3.6ch;
-  }
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Status highlights (set by JS)
-───────────────────────────────────────────────────────────────────────────── */
-.row.expired {
-  background: #fff2f2;
-  border-left: 3px solid #e53935;
-}
-
-/* Brighter, less-orange yellow */
-.row.expiring-soon {
-  background: #ffff66;                /* bright highlighter yellow */
-  border-left: 3px solid #ffef00;     /* vivid yellow border */
-}
-
-.row.expiring-soon .exp-input {
-  background: #fffed1;                /* pale yellow inside field */
-  border-color: #ffea00;
-}
-
-/* Keep the label legible on yellow */
-.row.expiring-soon .exp-label {
-  color: #6b6b00;                     /* olive/dark yellow text */
-  font-weight: 700;
-}
-
-/* Expired label styling only (don't override the 'expiring-soon' label) */
-.row.expired .exp-label {
-  font-weight: 600;
-  color: #8c2f2f;
-}
-
-/* ────────────────────────────────────────────────────────────────────────────
-   Mobile (≤600px): keep one line; squeeze widths so rows fit
-───────────────────────────────────────────────────────────────────────────── */
-@media (max-width: 600px) {
-  .row {
-    flex-wrap: nowrap;        /* keep everything on one line */
-  }
-
-  .row input[type="text"] {
-    flex: 1 0 auto;           /* grow but don’t shrink below content */
-    max-width: 150px;         /* ensure it’s tap-able */
-  }
-
-  .row input[type="number"] {
-    flex: 0 0 50px;           /* fixed 50px on mobile */
-    max-width: 50px;
-    text-align: center;
-    padding: 6px;
-    box-sizing: border-box;
-  }
-
-  .row button {
-    flex: 0 0 auto;
-    min-width: 40px;
-  }
-
-  .exp-input {
-    width: 8ch;               /* tiny squeeze on small screens */
-  }
-}
-
-/* ──────────────────────────────────────────────────────────────────────────
-   Pantry folders & items
-────────────────────────────────────────────────────────────────────────── */
+/* Folder header (with caret) */
 .folder {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-  cursor: pointer;
+  display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600;
+}
+.folder-title { flex:1; user-select:none; }
+.caret {
+  width:26px; height:26px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;
+  display:inline-flex; align-items:center; justify-content:center; line-height:1; font-size:16px;
+}
+.caret:focus { outline:2px solid #0ea5e9; outline-offset:2px; }
+.delete-btn {
+  background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; border-radius:4px;
+  padding:4px 6px; font-size:.9rem;
 }
 
-.folder .arrow {
-  font-weight: bold;
-  width: 1em;
-}
+/* Items list */
+.folder-items { margin:8px 0 16px 34px; }  /* indent under header + caret width */
+.folder.collapsed + .folder-items { display:none; }
 
-.folder-title {
-  flex: 1 1 auto;
-  font-weight: bold;
-}
+/* Item row layout */
+.row { display:flex; flex-direction:column; gap:6px; margin:8px 0; }
+.row-main { display:flex; align-items:center; gap:8px; }
+.row input[type="text"] { min-width:220px; padding:6px 8px; }
+.row button { padding:4px 8px; }
 
-.folder-add {
-  flex: 0 0 auto;
+/* Status bar under qty */
+.status-bar { display:flex; gap:6px; flex-wrap:wrap; padding-left:0; }
+.status-btn {
+  border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; border-radius:4px;
+  padding:4px 10px; font-size:.8rem;
 }
+.status-btn[aria-pressed="true"] { font-weight:700; }
 
-/* Delete‐folder button */
-.folder-remove {
-  background: #900;
-  color: #fff;
-  border: 1px solid #600;
-  border-radius: 4px;
-  padding: 4px 6px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  flex: 0 0 auto;
-  margin-left: 4px;     /* space from the + button */
-}
-
-/* Force folder items flush with the left (or with minimal indent) */
-.folder-items {
-  margin-left: 0.5em !important;
-  padding-left: 0 !important;
-}
+/* Active colorways */
+.status-btn.full[aria-pressed="true"]  { background:#dcfce7; border-color:#22c55e; color:#14532d; }
+.status-btn.mid[aria-pressed="true"]   { background:#fef9c3; border-color:#eab308; color:#713f12; }
+.status-btn.low[aria-pressed="true"]   { background:#ffedd5; border-color:#f97316; color:#7c2d12; }
+.status-btn.empty[aria-pressed="true"] { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
