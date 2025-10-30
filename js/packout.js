@@ -1,12 +1,14 @@
-// Firestore (no auth) — one doc per page under collection "pages".
-// Data shape: { ts: number, folders: { [folderName]: [{ name: string, quantity: number }] } }
+// js/packout.js
+// Firestore-backed packout page (no auth, no expiry)
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
-  getFirestore, doc, getDoc, setDoc, onSnapshot
+  getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-// --- Your Firestore config ---
+/* ──────────────────────────────────────────────────────────────────
+   1) Firebase config  (PROJECT: protech-van-inventory-2025)
+   ────────────────────────────────────────────────────────────────── */
 const firebaseConfig = {
   apiKey: "AIzaSyDRMRiSsu0icqeWuxqaWXs-Ps2-3jS_DOg",
   authDomain: "protech-van-inventory-2025.firebaseapp.com",
@@ -20,213 +22,211 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
-// --- Page key comes from <body data-packout="packout-1"> etc ---
-const pageKey = (document.body.dataset.packout || 'packout-1').trim();
-const pageRef = doc(db, 'pages', pageKey);
+/* ──────────────────────────────────────────────────────────────────
+   2) Page wiring
+   ────────────────────────────────────────────────────────────────── */
+const addFolderBtn   = document.getElementById('add-folder');
+const downloadBtn    = document.getElementById('download-json');
+const container      = document.getElementById('packout-container'); // required
+const pageKey        = (document.title || 'packout')
+  .toLowerCase().replace(/\s+/g, '-');   // "Packout 1" -> "packout-1"
 
-// --- Local working copy of folders map ---
-let folders = {};  // { [folderName]: Array<{name, quantity}> }
+const colRef = collection(db, pageKey);  // one collection per page
 
-// Bind static handlers before Firestore so UI is responsive even if DB is blocked
-function bindStaticHandlers() {
-  const addBtn = document.getElementById('add-folder');
-  const dlBtn  = document.getElementById('download-json');
-
-  if (addBtn) {
-    addBtn.onclick = async () => {
-      const name = prompt('New folder name:');
-      if (!name) return;
-      if (!folders[name]) folders[name] = [];
-      render(); // reflect instantly
-      try {
-        await save();
-      } catch (e) {
-        console.error('Save failed:', e);
-        alert('Could not save to Firestore. Check Firestore Rules.');
-      }
-    };
-  }
-
-  if (dlBtn) {
-    dlBtn.onclick = () => {
-      const json = JSON.stringify(folders, null, 2);
-      const blob = new Blob([json], { type: 'application/json' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      a.href = url;
-      a.download = `${pageKey}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    };
-  }
+function slugify(s) {
+  const base = (s || '').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  return base || ('folder-' + Date.now());
 }
 
-// Save helper
-async function save() {
-  await setDoc(pageRef, { ts: Date.now(), folders }, { merge: true });
+/* ──────────────────────────────────────────────────────────────────
+   3) Firestore helpers
+   ────────────────────────────────────────────────────────────────── */
+async function loadAll() {
+  const out = {}; // { id: {name, items:[{name, qty}] } }
+  const snap = await getDocs(colRef);
+  snap.forEach(d => { out[d.id] = d.data(); });
+  return out;
 }
 
-// Ensure the page doc exists and pull initial data
-async function ensureDocAndLoad() {
-  try {
-    const snap = await getDoc(pageRef);
-    if (!snap.exists()) {
-      await setDoc(pageRef, { ts: Date.now(), folders: {} }, { merge: true });
-      folders = {};
-    } else {
-      const data = snap.data() || {};
-      folders = data.folders || {};
-    }
-  } catch (err) {
-    console.error('Firestore access error:', err);
-    // Keep going — UI is still usable; saves will alert if blocked.
-  }
+async function createFolder(displayName) {
+  const id = slugify(displayName);
+  await setDoc(doc(colRef, id), { name: displayName, items: [] }, { merge: false });
+  return id;
 }
 
-// UI rendering
-function render() {
-  const container = document.getElementById('page-container');
-  if (!container) return;
+async function saveItems(folderId, items) {
+  await updateDoc(doc(colRef, folderId), { items });
+}
+
+async function removeFolder(folderId) {
+  await deleteDoc(doc(colRef, folderId));
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   4) UI rendering
+   ────────────────────────────────────────────────────────────────── */
+function render(data) {
   container.innerHTML = '';
 
-  Object.entries(folders).forEach(([folderName, items]) => {
-    const fld = document.createElement('div');
-    fld.className = 'folder';
-
-    const arrow = document.createElement('span');
-    arrow.className = 'arrow';
-    arrow.textContent = '▼';
-    fld.appendChild(arrow);
+  Object.entries(data).forEach(([folderId, folder]) => {
+    // Folder header
+    const header = document.createElement('div');
+    header.className = 'folder';
 
     const title = document.createElement('span');
     title.className = 'folder-title';
-    title.textContent = folderName;
-    fld.appendChild(title);
+    title.textContent = folder.name || '(untitled)';
+    header.appendChild(title);
 
     const addItemBtn = document.createElement('button');
     addItemBtn.textContent = '+';
-    addItemBtn.title = `Add item to ${folderName}`;
+    addItemBtn.title = 'Add item';
     addItemBtn.className = 'folder-add';
-    fld.appendChild(addItemBtn);
+    header.appendChild(addItemBtn);
 
-    const removeBtn = document.createElement('button');
-    removeBtn.textContent = '🗑️';
-    removeBtn.className = 'folder-remove';
-    fld.appendChild(removeBtn);
+    const delFolderBtn = document.createElement('button');
+    delFolderBtn.textContent = '🗑️';
+    delFolderBtn.className = 'folder-remove';
+    header.appendChild(delFolderBtn);
 
-    container.appendChild(fld);
+    container.appendChild(header);
 
+    // Items list
     const list = document.createElement('div');
     list.className = 'folder-items';
-    list.style.display = 'block';
     container.appendChild(list);
 
-    // Toggle visibility
-    arrow.onclick = () => {
-      const open = list.style.display === 'block';
-      list.style.display = open ? 'none' : 'block';
-      arrow.textContent  = open ? '▶' : '▼';
-    };
+    const items = Array.isArray(folder.items) ? folder.items.slice() : [];
 
-    // Remove folder
-    removeBtn.addEventListener('pointerdown', async (e) => {
-      e.preventDefault();
-      if (!confirm(`Delete folder “${folderName}” and all its items?`)) return;
-      delete folders[folderName];
-      render();
-      try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
-    });
-
-    // Add item
-    addItemBtn.onclick = async () => {
-      items.push({ name: '', quantity: 0 });
-      render();
-      try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
-    };
-
-    // Item rows
-    items.forEach((item, idx) => {
+    function pushRow(item, index) {
       const row = document.createElement('div');
       row.className = 'row';
 
-      const del = document.createElement('button');
-      del.textContent = '🗑️';
-      del.classList.add('delete-btn');
-      del.addEventListener('pointerdown', async (e) => {
+      // delete item
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '🗑️';
+      delBtn.className = 'delete-btn';
+      delBtn.addEventListener('pointerdown', async (e) => {
         e.preventDefault();
-        items.splice(idx, 1);
-        render();
-        try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
+        items.splice(index, 1);
+        await saveItems(folderId, items);
+        init(); // re-render
       });
-      row.appendChild(del);
+      row.appendChild(delBtn);
 
-      const nameInput = document.createElement('input');
-      nameInput.type = 'text';
-      nameInput.value = item.name || '';
-      nameInput.placeholder = 'Item name';
-      nameInput.onchange = async () => {
-        items[idx].name = nameInput.value;
-        try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
+      // name
+      const nameI = document.createElement('input');
+      nameI.type = 'text';
+      nameI.placeholder = 'Item name';
+      nameI.value = item.name || '';
+      nameI.onchange = async () => {
+        items[index].name = nameI.value;
+        await saveItems(folderId, items);
       };
-      row.appendChild(nameInput);
+      row.appendChild(nameI);
 
+      // minus
       const minus = document.createElement('button');
       minus.textContent = '–';
       minus.addEventListener('pointerdown', async (e) => {
         e.preventDefault();
-        items[idx].quantity = Math.max(0, (items[idx].quantity || 0) - 1);
-        qty.value = items[idx].quantity;
-        try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
+        const v = Math.max(0, (items[index].qty || 0) - 1);
+        items[index].qty = v;
+        qty.value = v;
+        await saveItems(folderId, items);
       });
       row.appendChild(minus);
 
+      // qty
       const qty = document.createElement('input');
       qty.type = 'number';
       qty.min = 0;
-      qty.value = item.quantity || 0;
+      qty.value = item.qty || 0;
       qty.onchange = async () => {
-        items[idx].quantity = parseInt(qty.value, 10) || 0;
-        try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
+        items[index].qty = parseInt(qty.value, 10) || 0;
+        await saveItems(folderId, items);
       };
       row.appendChild(qty);
 
+      // plus
       const plus = document.createElement('button');
       plus.textContent = '+';
       plus.addEventListener('pointerdown', async (e) => {
         e.preventDefault();
-        items[idx].quantity = (items[idx].quantity || 0) + 1;
-        qty.value = items[idx].quantity;
-        try { await save(); } catch (e) { console.error(e); alert('Could not save. Check Firestore Rules.'); }
+        const v = (items[index].qty || 0) + 1;
+        items[index].qty = v;
+        qty.value = v;
+        await saveItems(folderId, items);
       });
       row.appendChild(plus);
 
       list.appendChild(row);
-    });
+    }
+
+    items.forEach((it, idx) => pushRow(it, idx));
+
+    // add new item
+    addItemBtn.onclick = async () => {
+      items.push({ name: '', qty: 0 });
+      await saveItems(folderId, items);
+      init();
+    };
+
+    // delete folder
+    delFolderBtn.onclick = async () => {
+      const ok = confirm(`Delete folder “${folder.name}” and all its items?`);
+      if (!ok) return;
+      try {
+        await removeFolder(folderId);
+        init();
+      } catch (err) {
+        console.error('Delete folder failed:', err);
+        alert('Could not delete folder (see console for details).');
+      }
+    };
   });
 }
 
-// Initialize
-(async function init() {
-  // 1) Always bind buttons so “Add Folder” works immediately
-  bindStaticHandlers();
-
-  // 2) Show UI once, even before Firestore loads
-  render();
-
-  // 3) Try to load current data / create doc
-  await ensureDocAndLoad();
-  render();
-
-  // 4) Subscribe to live updates (if rules allow)
+/* ──────────────────────────────────────────────────────────────────
+   5) Buttons
+   ────────────────────────────────────────────────────────────────── */
+addFolderBtn.onclick = async () => {
+  const name = prompt('New folder name:');
+  if (!name) return;
   try {
-    onSnapshot(pageRef, (snap) => {
-      const data = snap.data() || {};
-      folders = data.folders || {};
-      render();
-    }, (err) => {
-      console.error('onSnapshot error:', err);
-    });
-  } catch (e) {
-    console.error('Snapshot subscribe failed:', e);
+    await createFolder(name);
+    init();
+  } catch (err) {
+    console.error('Create folder failed:', err);
+    alert('Could not create folder (see console for details).');
   }
-})();
+};
+
+if (downloadBtn) {
+  downloadBtn.onclick = async () => {
+    const data = await loadAll();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url;
+    a.download = `${pageKey}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   6) Boot
+   ────────────────────────────────────────────────────────────────── */
+async function init() {
+  try {
+    const data = await loadAll();
+    render(data);
+  } catch (err) {
+    console.error('Firestore load error:', err);
+    // Keep the UI usable; just show a friendly message instead of a blocking alert
+    container.innerHTML = '<p style="color:#900">Could not load data. Check Firestore config/rules (see console).</p>';
+  }
+}
+
+init();
