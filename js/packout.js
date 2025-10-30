@@ -1,5 +1,6 @@
 // js/packout.js
-// Firestore-backed Packout pages with expand/collapse and per-item status.
+// Firestore-backed Packout pages with expand/collapse and per-item status
+// where the selected status can be toggled OFF by tapping again.
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import {
@@ -35,7 +36,7 @@ const pageKey = (document.body?.dataset?.packout) ||
 
 const colRef = collection(db, pageKey);
 
-// Collapse state (local)
+// Collapse state (local only)
 const collapseKey = (id) => `packout:${pageKey}:collapsed:${id}`;
 const getCollapsed = (id) => localStorage.getItem(collapseKey(id)) === '1';
 const setCollapsed = (id, val) => {
@@ -65,25 +66,9 @@ async function deleteFolder(folderId) {
   await deleteDoc(doc(colRef, folderId));
 }
 
-// STATUS UI helpers
+// Status helpers
 const STATUS_ORDER = ['empty', 'low', 'mid', 'full'];
-const STATUS_LABEL = {
-  empty: 'Empty',
-  low: 'Low',
-  mid: 'Mid',
-  full: 'Full'
-};
-function makeStatusButton(kind, isActive, onClick) {
-  const btn = document.createElement('button');
-  btn.className = `status-btn ${kind}`;
-  btn.textContent = STATUS_LABEL[kind];
-  btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-  btn.addEventListener('click', async (e) => {
-    e.preventDefault();
-    await onClick(kind);
-  });
-  return btn;
-}
+const STATUS_LABEL = { empty: 'Empty', low: 'Low', mid: 'Mid', full: 'Full' };
 
 // Render
 function render(data) {
@@ -112,8 +97,8 @@ function render(data) {
     addItemBtn.title = 'Add item';
     addItemBtn.addEventListener('click', async () => {
       const items = Array.isArray(folder.items) ? folder.items.slice() : [];
-      // Default new items to "empty" so you can mark them quickly.
-      items.push({ name: '', qty: 0, status: 'empty' });
+      // Default: NO status selected initially (no 'status' field).
+      items.push({ name: '', qty: 0 });
       await saveItems(folderId, items);
       await init();
     });
@@ -137,7 +122,6 @@ function render(data) {
     list.style.display = isCollapsed ? 'none' : '';
     container.appendChild(list);
 
-    // toggle
     function toggle() {
       const newCollapsed = list.style.display !== 'none';
       list.style.display = newCollapsed ? 'none' : '';
@@ -153,13 +137,13 @@ function render(data) {
     const items = Array.isArray(folder.items) ? folder.items.slice() : [];
 
     const pushRow = (item, index) => {
-      // Ensure legacy docs have a status field
-      if (!STATUS_ORDER.includes(item.status)) item.status = 'empty';
+      // Normalize legacy values to "no selection" unless valid.
+      const active = STATUS_ORDER.includes(item.status) ? item.status : null;
 
       const row = document.createElement('div');
       row.className = 'row';
 
-      // Top line: delete, name, qty controls
+      // Line 1: delete, name, qty controls
       const main = document.createElement('div');
       main.className = 'row-main';
 
@@ -218,18 +202,33 @@ function render(data) {
 
       row.appendChild(main);
 
-      // Second line: status buttons
+      // Line 2: status buttons (one-hot, but can toggle off the active one)
       const statusBar = document.createElement('div');
       statusBar.className = 'status-bar';
 
       const setStatus = async (kind) => {
-        items[index].status = kind;
+        const current = STATUS_ORDER.includes(items[index].status) ? items[index].status : null;
+        const next = (current === kind) ? null : kind; // toggle off if same button tapped
+        if (next) {
+          items[index].status = next;
+        } else {
+          // remove field to represent "no selection"
+          delete items[index].status;
+        }
         await saveItems(folderId, items);
-        await init(); // re-render to reflect button highlight
+        await init(); // re-render to update button highlights
       };
 
       STATUS_ORDER.forEach(kind => {
-        const btn = makeStatusButton(kind, item.status === kind, setStatus);
+        const btn = document.createElement('button');
+        btn.className = `status-btn ${kind}`;
+        const pressed = active === kind;
+        btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+        btn.textContent = STATUS_LABEL[kind];
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          await setStatus(kind);
+        });
         statusBar.appendChild(btn);
       });
 
