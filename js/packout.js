@@ -1,19 +1,18 @@
 // js/packout.js
-// Firestore-backed Packout pages with expand/collapse per folder.
+// Firestore-backed Packout pages with expand/collapse and per-item status.
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import {
   getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc
 } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js';
 
-/* 1) Firebase config — project: protech-van-inventory-2025
-   (Web config is not a secret; rules protect your data.) */
+/* Firebase config — project: protech-van-inventory-2025 */
 const firebaseConfig = {
   apiKey: "AIzaSyDRMRiSsu0icqeWuxqaWXs-Ps2-3jS_DOg",
   authDomain: "protech-van-inventory-2025.firebaseapp.com",
   projectId: "protech-van-inventory-2025",
   storageBucket: "protech-van-inventory-2025.appspot.com",
-  appId: "1:818777808639:web:demo" // non-sensitive placeholder
+  appId: "1:818777808639:web:demo"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -30,13 +29,13 @@ if (!container) {
   throw new Error('Missing container: include <div id="packout-container"></div> or id="page-container".');
 }
 
-// derive a collection key for this page
+// Page/collection key
 const pageKey = (document.body?.dataset?.packout) ||
   (document.title || 'packout').toLowerCase().replace(/\s+/g, '-');
 
 const colRef = collection(db, pageKey);
 
-// collapse state (local only)
+// Collapse state (local)
 const collapseKey = (id) => `packout:${pageKey}:collapsed:${id}`;
 const getCollapsed = (id) => localStorage.getItem(collapseKey(id)) === '1';
 const setCollapsed = (id, val) => {
@@ -44,7 +43,7 @@ const setCollapsed = (id, val) => {
   else localStorage.removeItem(collapseKey(id));
 };
 
-// helpers
+// Helpers
 const slugify = (s) => (s || '')
   .toLowerCase().trim()
   .replace(/[^a-z0-9]+/g, '-')
@@ -66,7 +65,27 @@ async function deleteFolder(folderId) {
   await deleteDoc(doc(colRef, folderId));
 }
 
-// render
+// STATUS UI helpers
+const STATUS_ORDER = ['empty', 'low', 'mid', 'full'];
+const STATUS_LABEL = {
+  empty: 'Empty',
+  low: 'Low',
+  mid: 'Mid',
+  full: 'Full'
+};
+function makeStatusButton(kind, isActive, onClick) {
+  const btn = document.createElement('button');
+  btn.className = `status-btn ${kind}`;
+  btn.textContent = STATUS_LABEL[kind];
+  btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  btn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    await onClick(kind);
+  });
+  return btn;
+}
+
+// Render
 function render(data) {
   container.innerHTML = '';
 
@@ -93,7 +112,8 @@ function render(data) {
     addItemBtn.title = 'Add item';
     addItemBtn.addEventListener('click', async () => {
       const items = Array.isArray(folder.items) ? folder.items.slice() : [];
-      items.push({ name: '', qty: 0 });
+      // Default new items to "empty" so you can mark them quickly.
+      items.push({ name: '', qty: 0, status: 'empty' });
       await saveItems(folderId, items);
       await init();
     });
@@ -117,9 +137,9 @@ function render(data) {
     list.style.display = isCollapsed ? 'none' : '';
     container.appendChild(list);
 
-    // toggle behavior on caret or title click
+    // toggle
     function toggle() {
-      const newCollapsed = list.style.display !== 'none' ? true : false;
+      const newCollapsed = list.style.display !== 'none';
       list.style.display = newCollapsed ? 'none' : '';
       header.classList.toggle('collapsed', newCollapsed);
       caret.textContent = newCollapsed ? '▸' : '▾';
@@ -133,8 +153,15 @@ function render(data) {
     const items = Array.isArray(folder.items) ? folder.items.slice() : [];
 
     const pushRow = (item, index) => {
+      // Ensure legacy docs have a status field
+      if (!STATUS_ORDER.includes(item.status)) item.status = 'empty';
+
       const row = document.createElement('div');
       row.className = 'row';
+
+      // Top line: delete, name, qty controls
+      const main = document.createElement('div');
+      main.className = 'row-main';
 
       const delBtn = document.createElement('button');
       delBtn.textContent = '🗑️';
@@ -144,7 +171,7 @@ function render(data) {
         await saveItems(folderId, items);
         await init();
       });
-      row.appendChild(delBtn);
+      main.appendChild(delBtn);
 
       const nameI = document.createElement('input');
       nameI.type = 'text';
@@ -154,7 +181,18 @@ function render(data) {
         items[index].name = nameI.value;
         await saveItems(folderId, items);
       });
-      row.appendChild(nameI);
+      main.appendChild(nameI);
+
+      const minus = document.createElement('button');
+      minus.textContent = '−';
+      minus.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const v = Math.max(0, (item.qty || 0) - 1);
+        items[index].qty = v;
+        qty.value = v;
+        await saveItems(folderId, items);
+      });
+      main.appendChild(minus);
 
       const qty = document.createElement('input');
       qty.type = 'number';
@@ -165,31 +203,37 @@ function render(data) {
         qty.value = items[index].qty;
         await saveItems(folderId, items);
       });
-
-      const minus = document.createElement('button');
-      minus.textContent = '−';
-      minus.addEventListener('click', async (e) => {
-        e.preventDefault();
-        const v = Math.max(0, (items[index].qty || 0) - 1);
-        items[index].qty = v;
-        qty.value = v;
-        await saveItems(folderId, items);
-      });
+      main.appendChild(qty);
 
       const plus = document.createElement('button');
       plus.textContent = '+';
       plus.addEventListener('click', async (e) => {
         e.preventDefault();
-        const v = (items[index].qty || 0) + 1;
+        const v = (item.qty || 0) + 1;
         items[index].qty = v;
         qty.value = v;
         await saveItems(folderId, items);
       });
+      main.appendChild(plus);
 
-      row.appendChild(minus);
-      row.appendChild(qty);
-      row.appendChild(plus);
+      row.appendChild(main);
 
+      // Second line: status buttons
+      const statusBar = document.createElement('div');
+      statusBar.className = 'status-bar';
+
+      const setStatus = async (kind) => {
+        items[index].status = kind;
+        await saveItems(folderId, items);
+        await init(); // re-render to reflect button highlight
+      };
+
+      STATUS_ORDER.forEach(kind => {
+        const btn = makeStatusButton(kind, item.status === kind, setStatus);
+        statusBar.appendChild(btn);
+      });
+
+      row.appendChild(statusBar);
       list.appendChild(row);
     };
 
@@ -197,13 +241,13 @@ function render(data) {
   });
 }
 
-// controls
+// Controls
 addFolderBtn?.addEventListener('click', async () => {
   const name = prompt('Folder name?');
   if (!name) return;
   const id = slugify(name);
   await ensureFolder(id, { name, items: [] });
-  setCollapsed(id, false); // expanded by default
+  setCollapsed(id, false);
   await init();
 });
 
@@ -217,7 +261,7 @@ downloadBtn?.addEventListener('click', async () => {
   URL.revokeObjectURL(a.href);
 });
 
-// boot
+// Boot
 async function init() {
   try {
     const data = await loadAll();
