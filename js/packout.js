@@ -272,3 +272,226 @@ function render(data) {
 
       if (!locked) {
         const delBtn = document.createElement('button');
+        delBtn.textContent = '🗑️';
+        delBtn.className = 'delete-btn';
+        delBtn.title = 'Delete item';
+        delBtn.addEventListener('click', async () => {
+          items.splice(index, 1);
+          await saveItems(folderId, items);
+          await init();
+        });
+        main.appendChild(delBtn);
+      }
+
+      // Name: input (unlocked) or static (locked)
+      if (locked) {
+        const nameText = document.createElement('span');
+        nameText.className = 'name-text';
+        nameText.textContent = item.name && item.name.trim() ? item.name : '(no name)';
+        main.appendChild(nameText);
+      } else {
+        const nameI = document.createElement('input');
+        nameI.type = 'text';
+        nameI.placeholder = 'Item name';
+        nameI.value = item.name || '';
+        nameI.addEventListener('change', async () => {
+          items[index].name = nameI.value;
+          await saveItems(folderId, items);
+        });
+        main.appendChild(nameI);
+      }
+
+      // Right side depends on kind + lock
+      if (kind === 'qty') {
+        if (locked) {
+          const qtyText = document.createElement('span');
+          qtyText.className = 'qty-text';
+          qtyText.textContent = String(item.qty ?? 0);
+          main.appendChild(qtyText);
+        } else {
+          const minus = document.createElement('button');
+          minus.textContent = '−';
+          minus.title = 'Decrement';
+          minus.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const v = Math.max(0, (item.qty || 0) - 1);
+            items[index].qty = v;
+            qty.value = v;
+            await saveItems(folderId, items);
+          });
+          main.appendChild(minus);
+
+          const qty = document.createElement('input');
+          qty.type = 'number';
+          qty.min = '0';
+          qty.value = item.qty || 0;
+          qty.addEventListener('change', async () => {
+            items[index].qty = Math.max(0, parseInt(qty.value || '0', 10));
+            qty.value = items[index].qty;
+            await saveItems(folderId, items);
+          });
+          main.appendChild(qty);
+
+          const plus = document.createElement('button');
+          plus.textContent = '+';
+          plus.title = 'Increment';
+          plus.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const v = (item.qty || 0) + 1;
+            items[index].qty = v;
+            qty.value = v;
+            await saveItems(folderId, items);
+          });
+          main.appendChild(plus);
+        }
+      } else if (kind === 'status') {
+        if (locked) {
+          const chip = document.createElement('span');
+          chip.className = `status-chip ${statusActive || 'none'}`;
+          chip.textContent = statusActive ? (STATUS_LABEL[statusActive] || statusActive) : '—';
+          main.appendChild(chip);
+        } else {
+          const statusBar = document.createElement('div');
+          statusBar.className = 'status-bar';
+
+          const setStatus = async (k) => {
+            const current = STATUS_ORDER.includes(items[index].status) ? items[index].status : null;
+            const next = (current === k) ? null : k; // toggle off if same
+            if (next) items[index].status = next; else delete items[index].status;
+            await saveItems(folderId, items);
+            await init();
+          };
+
+          STATUS_ORDER.forEach(k => {
+            const btn = document.createElement('button');
+            btn.className = `status-btn ${k}`;
+            const pressed = statusActive === k;
+            btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+            btn.textContent = STATUS_LABEL[k];
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              await setStatus(k);
+            });
+            statusBar.appendChild(btn);
+          });
+
+          main.appendChild(statusBar);
+        }
+      } else { // kind === 'length'
+        if (locked) {
+          const lenText = document.createElement('span');
+          lenText.className = 'len-text';
+          if (typeof item.lengthFt === 'number') {
+            lenText.textContent = `${item.lengthFt} ft`;
+          } else {
+            lenText.textContent = '—';
+          }
+          main.appendChild(lenText);
+        } else {
+          const lenGroup = document.createElement('div');
+          lenGroup.className = 'len-group';
+
+          const lenInput = document.createElement('input');
+          lenInput.type = 'number';
+          lenInput.step = '0.1';
+          // no min: allow blank; show empty string if undefined
+          lenInput.value = (typeof item.lengthFt === 'number') ? String(item.lengthFt) : '';
+          lenInput.className = 'len-input';
+          lenInput.placeholder = '0.0';
+          lenInput.addEventListener('change', async () => {
+            const v = parseFloat(lenInput.value);
+            if (Number.isFinite(v)) items[index].lengthFt = v;
+            else delete items[index].lengthFt; // keep blank → shows "—" in locked mode
+            await saveItems(folderId, items);
+          });
+
+          const unit = document.createElement('span');
+          unit.className = 'unit';
+          unit.textContent = 'ft';
+
+          lenGroup.appendChild(lenInput);
+          lenGroup.appendChild(unit);
+          main.appendChild(lenGroup);
+        }
+      }
+
+      // Type cycle button (unlocked only) — keeps prior values
+      if (!locked) {
+        const cycle = document.createElement('button');
+        cycle.className = 'convert-btn';
+        cycle.title = 'Cycle item type';
+        cycle.textContent = `Type: ${KIND_LABEL[kind]}`;
+        cycle.addEventListener('click', async () => {
+          items[index].kind = nextKind(kind);
+          await saveItems(folderId, items);
+          await init();
+        });
+        main.appendChild(cycle);
+      }
+
+      row.appendChild(main);
+      list.appendChild(row);
+    };
+
+    items.forEach(pushRow);
+  });
+}
+
+// Controls
+addFolderBtn?.addEventListener('click', async () => {
+  if (locked) return;
+  const name = prompt('Folder name?');
+  if (!name) return;
+  const clean = name.trim();
+  if (!clean) return;
+
+  // Prevent duplicate names
+  const all = await loadAll();
+  const dup = Object.values(all).some(f => (f?.name || '').trim().toLowerCase() === clean.toLowerCase());
+  if (dup) { alert('That folder name is already in use.'); return; }
+
+  const id = slugify(clean);
+  if (all[id]) { alert('A folder with a similar ID already exists. Try a different name.'); return; }
+
+  await ensureFolder(id, { name: clean, items: [] });
+  setCollapsed(id, false);
+  await init();
+});
+
+downloadBtn?.addEventListener('click', async () => {
+  const data = await loadAll();
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${pageKey}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+toggleLockBtn?.addEventListener('click', () => {
+  locked = !locked;
+  setLockUI();
+  init();
+  closePopover();
+});
+
+// Always lock on navigation away
+window.addEventListener('beforeunload', () => {
+  locked = true;
+  setLockUI();
+  closePopover();
+});
+
+// Boot
+async function init() {
+  try {
+    const data = await loadAll();
+    render(data);
+  } catch (err) {
+    console.error('Firestore load error:', err);
+    container.innerHTML = '<p style="color:#900">Could not load data. Verify Firebase config and Firestore rules.</p>';
+  }
+}
+
+setLockUI();
+init();
