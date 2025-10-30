@@ -4,7 +4,7 @@
 // ─── Firebase (v10) ──────────────────────────────────────────────────────────
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import {
-  getFirestore, doc, getDoc, setDoc
+  getFirestore, doc, getDoc, setDoc, updateDoc, deleteField
 } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 
 // Replace with YOUR config (protech-van-inventory-2025)
@@ -47,12 +47,23 @@ async function load() {
     folders = data?.folders || {};
   } else {
     folders = {};
-    await setDoc(docRef, { folders, ts: Date.now() }, { merge: true });
+    await setDoc(docRef, { folders, ts: Date.now() }); // create doc
   }
 }
 
+// Overwrite the whole doc (no merge) so removed items don’t linger
 async function save() {
-  await setDoc(docRef, { folders, ts: Date.now() }, { merge: true });
+  await setDoc(docRef, { folders, ts: Date.now() }); // merge: false by default
+}
+
+// Delete a single folder key from the nested map in Firestore,
+// then mirror it locally.
+async function removeFolder(folderName) {
+  await updateDoc(docRef, {
+    [`folders.${folderName}`]: deleteField(),
+    ts: Date.now()
+  });
+  delete folders[folderName];
 }
 
 // ─── UI builders ────────────────────────────────────────────────────────────
@@ -93,7 +104,7 @@ function render() {
           save().catch(console.error);
         }
       }, '+'),
-      // 🗑️ delete folder (use CLICK, not pointerdown)
+      // 🗑️ delete folder (CLICK + stopPropagation)
       h('button', {
         className: 'folder-remove',
         title: 'Delete folder',
@@ -102,9 +113,13 @@ function render() {
           e.stopPropagation();
           const ok = confirm(`Delete folder “${folderName}” and all its items?`);
           if (!ok) return;
-          delete folders[folderName];
-          render();
-          try { await save(); } catch (err) { console.error(err); alert('Could not save. Check Firestore Rules.'); }
+          try {
+            await removeFolder(folderName);
+            render();
+          } catch (err) {
+            console.error(err);
+            alert('Could not delete. Check Firestore Rules.');
+          }
         }
       }, '🗑️'),
     );
@@ -116,8 +131,10 @@ function render() {
     containerEl.appendChild(list);
 
     items.forEach((item, idx) => {
+      let qtyInput; // captured by +/- handlers
+
       const row = h('div', { className: 'row' },
-        // delete item (CLICK)
+        // delete item
         h('button', {
           className: 'delete-btn',
           title: 'Delete item',
@@ -146,14 +163,13 @@ function render() {
             e.preventDefault();
             const q = Math.max(0, (item.quantity || 0) - 1);
             items[idx].quantity = q;
-            // update adjacent number input if present
-            qtyInput.value = String(q);
+            if (qtyInput) qtyInput.value = String(q);
             save().catch(console.error);
           }
         }, '–'),
 
         // qty
-        (function makeQty() {
+        (() => {
           const el = h('input', {
             type: 'number',
             min: '0',
@@ -164,7 +180,7 @@ function render() {
               save().catch(console.error);
             }
           });
-          qtyInput = el; // capture to update when clicking +/- (closure)
+          qtyInput = el;
           return el;
         })(),
 
@@ -174,14 +190,12 @@ function render() {
             e.preventDefault();
             const q = (item.quantity || 0) + 1;
             items[idx].quantity = q;
-            qtyInput.value = String(q);
+            if (qtyInput) qtyInput.value = String(q);
             save().catch(console.error);
           }
         }, '+'),
       );
 
-      // local var for the qty input assigned in IIFE
-      let qtyInput;
       list.appendChild(row);
     });
   });
@@ -220,7 +234,6 @@ if (downloadBtn) {
   try {
     await load();
     render();
-    // simple “it loaded” log to console
     console.log(`Packout "${PACKOUT_KEY}" — Firestore OK:`, { ok: true, ts: Date.now() });
   } catch (err) {
     console.error('Init failed:', err);
