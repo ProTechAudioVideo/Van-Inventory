@@ -1,84 +1,87 @@
 // js/packout.js
-// Firestore-backed “Packout” pages (no framework). One collection per page.
-// Robust to either #packout-container or #page-container IDs and to either
-// <body data-packout="packout-1"> or <title>Packout 1</title>.
+// Firestore-backed Packout pages with expand/collapse per folder.
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import {
   getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc
 } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js';
 
-/* 1) Firebase config (project: protech-van-inventory-2025)
-   NOTE: Web config is not a secret. Security is enforced by Firestore rules.
-*/
+/* 1) Firebase config — project: protech-van-inventory-2025
+   (Web config is not a secret; rules protect your data.) */
 const firebaseConfig = {
   apiKey: "AIzaSyDRMRiSsu0icqeWuxqaWXs-Ps2-3jS_DOg",
   authDomain: "protech-van-inventory-2025.firebaseapp.com",
   projectId: "protech-van-inventory-2025",
-  // Storage isn't used here, but this is the canonical bucket format:
   storageBucket: "protech-van-inventory-2025.appspot.com",
-  appId: "1:818777808639:web:demo"
+  appId: "1:818777808639:web:demo" // non-sensitive placeholder
 };
 
-/* 2) Page wiring & collection selection */
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
+// DOM
 const addFolderBtn = document.getElementById('add-folder');
 const downloadBtn  = document.getElementById('download-json');
-
-// Accept either id to avoid null errors
 const container =
   document.getElementById('packout-container') ||
   document.getElementById('page-container');
 
 if (!container) {
-  throw new Error('Missing container: add <div id="packout-container"></div> (or id="page-container").');
+  throw new Error('Missing container: include <div id="packout-container"></div> or id="page-container".');
 }
 
-// derive a collection key: prefer data-packout, fall back to the title
+// derive a collection key for this page
 const pageKey = (document.body?.dataset?.packout) ||
   (document.title || 'packout').toLowerCase().replace(/\s+/g, '-');
 
-// one collection per page, e.g., “packout-1”
 const colRef = collection(db, pageKey);
 
-// helpers
-const slugify = (s) =>
-  (s || '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '') || ('folder-' + Date.now());
+// collapse state (local only)
+const collapseKey = (id) => `packout:${pageKey}:collapsed:${id}`;
+const getCollapsed = (id) => localStorage.getItem(collapseKey(id)) === '1';
+const setCollapsed = (id, val) => {
+  if (val) localStorage.setItem(collapseKey(id), '1');
+  else localStorage.removeItem(collapseKey(id));
+};
 
-/* 3) Firestore helpers */
+// helpers
+const slugify = (s) => (s || '')
+  .toLowerCase().trim()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/(^-|-$)/g, '') || ('folder-' + Date.now());
+
 async function loadAll() {
   const out = {};
   const snap = await getDocs(colRef);
-  snap.forEach(d => (out[d.id] = d.data()));
+  snap.forEach(d => out[d.id] = d.data());
   return out;
 }
-
 async function ensureFolder(id, data) {
   await setDoc(doc(colRef, id), data, { merge: true });
 }
-
 async function saveItems(folderId, items) {
   await updateDoc(doc(colRef, folderId), { items });
 }
-
 async function deleteFolder(folderId) {
   await deleteDoc(doc(colRef, folderId));
 }
 
-/* 4) UI render */
+// render
 function render(data) {
   container.innerHTML = '';
 
   Object.entries(data).forEach(([folderId, folder]) => {
-    // header
+    const isCollapsed = getCollapsed(folderId);
+
     const header = document.createElement('div');
-    header.className = 'folder';
+    header.className = 'folder' + (isCollapsed ? ' collapsed' : '');
+
+    const caret = document.createElement('button');
+    caret.className = 'caret';
+    caret.setAttribute('aria-label', isCollapsed ? 'Expand folder' : 'Collapse folder');
+    caret.setAttribute('aria-expanded', (!isCollapsed).toString());
+    caret.textContent = isCollapsed ? '▸' : '▾';
+    header.appendChild(caret);
 
     const title = document.createElement('span');
     title.className = 'folder-title';
@@ -109,10 +112,23 @@ function render(data) {
 
     container.appendChild(header);
 
-    // items list
     const list = document.createElement('div');
     list.className = 'folder-items';
+    list.style.display = isCollapsed ? 'none' : '';
     container.appendChild(list);
+
+    // toggle behavior on caret or title click
+    function toggle() {
+      const newCollapsed = list.style.display !== 'none' ? true : false;
+      list.style.display = newCollapsed ? 'none' : '';
+      header.classList.toggle('collapsed', newCollapsed);
+      caret.textContent = newCollapsed ? '▸' : '▾';
+      caret.setAttribute('aria-label', newCollapsed ? 'Expand folder' : 'Collapse folder');
+      caret.setAttribute('aria-expanded', (!newCollapsed).toString());
+      setCollapsed(folderId, newCollapsed);
+    }
+    caret.addEventListener('click', toggle);
+    title.addEventListener('click', toggle);
 
     const items = Array.isArray(folder.items) ? folder.items.slice() : [];
 
@@ -140,17 +156,6 @@ function render(data) {
       });
       row.appendChild(nameI);
 
-      const minus = document.createElement('button');
-      minus.textContent = '−';
-      minus.addEventListener('click', async (e) => {
-        e.preventDefault();
-        const v = Math.max(0, (items[index].qty || 0) - 1);
-        items[index].qty = v;
-        qty.value = v;
-        await saveItems(folderId, items);
-      });
-      row.appendChild(minus);
-
       const qty = document.createElement('input');
       qty.type = 'number';
       qty.min = '0';
@@ -160,7 +165,16 @@ function render(data) {
         qty.value = items[index].qty;
         await saveItems(folderId, items);
       });
-      row.appendChild(qty);
+
+      const minus = document.createElement('button');
+      minus.textContent = '−';
+      minus.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const v = Math.max(0, (items[index].qty || 0) - 1);
+        items[index].qty = v;
+        qty.value = v;
+        await saveItems(folderId, items);
+      });
 
       const plus = document.createElement('button');
       plus.textContent = '+';
@@ -171,6 +185,9 @@ function render(data) {
         qty.value = v;
         await saveItems(folderId, items);
       });
+
+      row.appendChild(minus);
+      row.appendChild(qty);
       row.appendChild(plus);
 
       list.appendChild(row);
@@ -180,12 +197,13 @@ function render(data) {
   });
 }
 
-/* 5) Controls */
+// controls
 addFolderBtn?.addEventListener('click', async () => {
   const name = prompt('Folder name?');
   if (!name) return;
   const id = slugify(name);
   await ensureFolder(id, { name, items: [] });
+  setCollapsed(id, false); // expanded by default
   await init();
 });
 
@@ -199,7 +217,7 @@ downloadBtn?.addEventListener('click', async () => {
   URL.revokeObjectURL(a.href);
 });
 
-/* 6) Boot */
+// boot
 async function init() {
   try {
     const data = await loadAll();
