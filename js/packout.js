@@ -1,6 +1,6 @@
 // js/packout.js
-// Packout pages with Lock/Unlock, two item types (qty | status),
-// add-item popover chooser, per-item convert, and expand/collapse.
+// Lock/Unlock view, qty|status items, add-item popover, per-item convert,
+// inline folder rename with duplicate checks and doc-ID change (slug) on save.
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import {
@@ -27,9 +27,7 @@ const container =
   document.getElementById('packout-container') ||
   document.getElementById('page-container');
 
-if (!container) {
-  throw new Error('Missing container: include <div id="packout-container"></div> or id="page-container".');
-}
+if (!container) throw new Error('Missing container: <div id="packout-container"> or id="page-container".');
 
 // Page/collection key
 const pageKey = (document.body?.dataset?.packout) ||
@@ -37,7 +35,7 @@ const pageKey = (document.body?.dataset?.packout) ||
 
 const colRef = collection(db, pageKey);
 
-// Collapse state (local only)
+// Collapse state
 const collapseKey = (id) => `packout:${pageKey}:collapsed:${id}`;
 const getCollapsed = (id) => localStorage.getItem(collapseKey(id)) === '1';
 const setCollapsed = (id, val) => {
@@ -77,10 +75,10 @@ async function ensureFolder(id, data) { await setDoc(doc(colRef, id), data, { me
 async function saveItems(folderId, items) { await updateDoc(doc(colRef, folderId), { items }); }
 async function deleteFolder(folderId) { await deleteDoc(doc(colRef, folderId)); }
 
-// Popover helper
+// Add-item popover (from your current build)
 let openPopover = null;
 function showAddPopover(anchorEl, onPick) {
-  closePopover(); // one at a time
+  closePopover();
   const pop = document.createElement('div');
   pop.className = 'popover';
   pop.role = 'dialog';
@@ -89,10 +87,8 @@ function showAddPopover(anchorEl, onPick) {
     <button class="popover-item" data-kind="status">🏷️ Status item</button>
   `;
   document.body.appendChild(pop);
-  // position near anchor
   const r = anchorEl.getBoundingClientRect();
   pop.style.top = `${window.scrollY + r.bottom + 6}px`;
-  // align right edge to anchor right so it doesn't overflow on mobile
   pop.style.left = `${window.scrollX + r.right - pop.offsetWidth}px`;
   requestAnimationFrame(() => {
     pop.style.left = `${window.scrollX + r.right - pop.offsetWidth}px`;
@@ -118,7 +114,87 @@ function closePopover() {
   }
 }
 
-// Render
+// ===== Inline rename helpers =====
+function startRenameFolder(folderId, folderData, titleSpan) {
+  if (locked) return;
+
+  // Build inline input
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'folder-title-input';
+  input.value = folderData.name || '';
+  input.setAttribute('aria-label', 'Edit folder name');
+
+  // Swap in DOM
+  titleSpan.style.display = 'none';
+  titleSpan.insertAdjacentElement('afterend', input);
+  input.focus();
+  input.select();
+
+  const cleanup = () => {
+    input.remove();
+    titleSpan.style.display = '';
+  };
+
+  const commit = async () => {
+    const newName = (input.value || '').trim();
+    const oldName = (folderData.name || '').trim();
+    if (!newName) { // reject empty
+      cleanup();
+      return;
+    }
+    // If unchanged, just bail
+    if (newName === oldName) {
+      cleanup();
+      return;
+    }
+
+    // Duplicate check (case-insensitive by name)
+    const all = await loadAll();
+    const dup = Object.entries(all).some(([id, f]) =>
+      id !== folderId && (f?.name || '').trim().toLowerCase() === newName.toLowerCase()
+    );
+    if (dup) {
+      alert('That folder name is already in use.');
+      input.focus(); input.select();
+      return;
+    }
+
+    // Determine target ID
+    const newId = slugify(newName);
+
+    try {
+      if (newId === folderId) {
+        // Same ID: update only the name
+        await ensureFolder(folderId, { name: newName });
+      } else {
+        // Migrate doc to new ID so JSON keys reflect the new name
+        const payload = { ...folderData, name: newName };
+        await setDoc(doc(colRef, newId), payload, { merge: false });
+        await deleteDoc(doc(colRef, folderId));
+
+        // Preserve collapsed state
+        if (getCollapsed(folderId)) setCollapsed(newId, true);
+        localStorage.removeItem(collapseKey(folderId));
+      }
+    } catch (e) {
+      console.error('Rename failed:', e);
+    } finally {
+      cleanup();
+      await init();
+    }
+  };
+
+  const cancel = () => cleanup();
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+  input.addEventListener('blur', commit);
+}
+
+// ===== Render =====
 function render(data) {
   setLockUI();
   container.innerHTML = '';
@@ -138,9 +214,20 @@ function render(data) {
     header.appendChild(caret);
 
     const title = document.createElement('span');
-    title.className = 'folder-title';
+    title.className = 'folder-title' + (!locked ? ' editable' : '');
     title.textContent = folder.name || '(untitled)';
     header.appendChild(title);
+
+    if (!locked) {
+      title.title = 'Click to rename';
+      title.addEventListener('click', (e) => {
+        e.stopPropagation(); // don’t toggle collapse
+        startRenameFolder(folderId, folder, title);
+      });
+    } else {
+      // In locked mode, clicking title toggles collapse (in addition to caret)
+      title.addEventListener('click', () => toggleCollapse());
+    }
 
     // Add item / delete folder (only unlocked)
     let addItemBtn = null;
@@ -150,14 +237,10 @@ function render(data) {
       addItemBtn.title = 'Add item';
       addItemBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
-        // show two-option popover
         showAddPopover(addItemBtn, async (kind) => {
           const items = Array.isArray(folder.items) ? folder.items.slice() : [];
-          if (kind === 'status') {
-            items.push({ kind: 'status', name: '' }); // no status selected initially
-          } else {
-            items.push({ kind: 'qty',    name: '', qty: 0 });
-          }
+          if (kind === 'status') items.push({ kind: 'status', name: '' });
+          else items.push({ kind: 'qty', name: '', qty: 0 });
           await saveItems(folderId, items);
           await init();
         });
@@ -195,13 +278,11 @@ function render(data) {
       closePopover();
     }
     caret.addEventListener('click', toggleCollapse);
-    title.addEventListener('click', toggleCollapse);
 
     const items = Array.isArray(folder.items) ? folder.items.slice() : [];
 
     const normalizeKind = (item) => {
       if (item.kind === 'qty' || item.kind === 'status') return item.kind;
-      // autodetect legacy
       return STATUS_ORDER.includes(item.status) ? 'status' : 'qty';
     };
 
@@ -291,18 +372,19 @@ function render(data) {
           main.appendChild(plus);
 
           // Convert control
-          const convert = document.createElement('button');
-          convert.className = 'convert-btn';
-          convert.title = 'Convert to status item';
-          convert.textContent = '→ Status';
-          convert.addEventListener('click', async () => {
-            delete items[index].qty;
-            items[index].kind = 'status';
-            // leave status unset (null) by default
-            await saveItems(folderId, items);
-            await init();
-          });
-          main.appendChild(convert);
+          if (!locked) {
+            const convert = document.createElement('button');
+            convert.className = 'convert-btn';
+            convert.title = 'Convert to status item';
+            convert.textContent = '→ Status';
+            convert.addEventListener('click', async () => {
+              delete items[index].qty;
+              items[index].kind = 'status';
+              await saveItems(folderId, items);
+              await init();
+            });
+            main.appendChild(convert);
+          }
         }
       } else { // kind === 'status'
         if (locked) {
@@ -366,8 +448,18 @@ addFolderBtn?.addEventListener('click', async () => {
   if (locked) return;
   const name = prompt('Folder name?');
   if (!name) return;
-  const id = slugify(name);
-  await ensureFolder(id, { name, items: [] });
+  const clean = name.trim();
+  if (!clean) return;
+
+  // Prevent duplicate names
+  const all = await loadAll();
+  const dup = Object.values(all).some(f => (f?.name || '').trim().toLowerCase() === clean.toLowerCase());
+  if (dup) { alert('That folder name is already in use.'); return; }
+
+  const id = slugify(clean);
+  if (all[id]) { alert('A folder with a similar ID already exists. Try a different name.'); return; }
+
+  await ensureFolder(id, { name: clean, items: [] });
   setCollapsed(id, false);
   await init();
 });

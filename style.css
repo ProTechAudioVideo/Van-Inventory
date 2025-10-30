@@ -21,11 +21,28 @@ button { cursor:pointer; }
 .toolbar-right { display:flex; gap:8px; align-items:center; }
 #add-folder, #download-json, #toggle-lock { padding:6px 10px; }
 #toggle-lock { border:1px solid #94a3b8; background:#f1f5f9; border-radius:6px; }
-#add-folder { display: inline-flex; } /* gets hidden in JS when locked */
+#add-folder { display:inline-flex; } /* JS hides this when locked */
 
 /* ===== Folder header (caret) ===== */
-.folder { display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600; }
+.folder {
+  display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600;
+}
 .folder-title { flex:1; user-select:none; }
+
+/* Editable folder title (unlocked mode) */
+.folder-title.editable { cursor:text; border-bottom:1px dashed transparent; }
+.folder-title.editable:hover { border-bottom-color:#cbd5e1; }
+
+/* Inline title input when renaming */
+.folder-title-input {
+  font: inherit;
+  font-weight: 600;
+  padding: 4px 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  min-width: 8ch;
+}
+
 .caret {
   width:26px; height:26px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;
   display:inline-flex; align-items:center; justify-content:center; line-height:1; font-size:16px;
@@ -45,7 +62,7 @@ button { cursor:pointer; }
 .row-main { display:flex; align-items:center; gap:8px; flex-wrap:nowrap; }
 .row-main > * { flex: 0 0 auto; }
 
-/* Name input + text */
+/* Name input + static text */
 .row input[type="text"]{
   min-width:0;
   flex:1 1 auto;
@@ -59,7 +76,7 @@ button { cursor:pointer; }
   border-radius:4px;
 }
 
-/* Qty input + text */
+/* Qty input + static number */
 input[type="number"]{
   width:2.8em;
   text-align:center;
@@ -79,10 +96,10 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
   background:#fff;
 }
 
-/* Buttons */
+/* Buttons in rows */
 .row button { padding:4px 8px; }
 
-/* ===== Status row (unlocked) ===== */
+/* ===== Status (unlocked buttons) ===== */
 .status-bar { display:flex; gap:6px; flex-wrap:wrap; padding-left:0; }
 .status-btn {
   border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; border-radius:4px;
@@ -94,7 +111,7 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 .status-btn.low[aria-pressed="true"]   { background:#ffedd5; border-color:#f97316; color:#7c2d12; }
 .status-btn.empty[aria-pressed="true"] { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
 
-/* Non-interactive chips for locked mode */
+/* Locked status chips (non-interactive) */
 .status-chip {
   display:inline-block;
   border:1px solid #cbd5e1;
@@ -120,16 +137,16 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
   font-size:.75rem;
 }
 
-/* Add-item popover */
+/* ===== Add-item popover ===== */
 .popover {
   position:absolute;
-  z-index: 999;
+  z-index:999;
   background:#fff;
   border:1px solid #e5e7eb;
   border-radius:8px;
-  box-shadow: 0 8px 20px rgba(0,0,0,.08);
+  box-shadow:0 8px 20px rgba(0,0,0,.08);
   padding:6px;
-  min-width: 180px;
+  min-width:180px;
 }
 .popover-item {
   display:block;
@@ -141,19 +158,17 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
   border-radius:6px;
 }
 .popover-item:hover,
-.popover-item:focus {
-  background:#f1f5f9;
-}
+.popover-item:focus { background:#f1f5f9; }
 
 /* ===== iPhone portrait tweaks ===== */
 @media (max-width: 430px) {
   body { margin:12px; }
   .caret { width:22px; height:22px; }
-  .folder-items { margin-left:18px; }
+  .folder-items { margin-left:18px; }   /* tighter indent to avoid overflow */
   .row-main { gap:6px; }
   input[type="number"] { width:2.35em; padding:6px 4px; }
   .status-btn { padding:3px 8px; font-size:.75rem; }
 }
 
-/* Guard */
-.container, .folder, .row, .row-main, .status-bar { max-width: 100%; }
+/* Guard against phantom overflow */
+.container, .folder, .row, .row-main, .status-bar { max-width:100%; }
