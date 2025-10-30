@@ -21,6 +21,7 @@ button { cursor:pointer; }
 .toolbar-right { display:flex; gap:8px; align-items:center; }
 #add-folder, #download-json, #toggle-lock { padding:6px 10px; }
 #toggle-lock { border:1px solid #94a3b8; background:#f1f5f9; border-radius:6px; }
+#add-folder { display: inline-flex; } /* gets hidden in JS when locked */
 
 /* ===== Folder header (caret) ===== */
 .folder { display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600; }
@@ -81,13 +82,17 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 /* Buttons */
 .row button { padding:4px 8px; }
 
-/* ===== Status row ===== */
+/* ===== Status row (unlocked) ===== */
 .status-bar { display:flex; gap:6px; flex-wrap:wrap; padding-left:0; }
 .status-btn {
   border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; border-radius:4px;
   padding:4px 10px; font-size:.8rem;
 }
 .status-btn[aria-pressed="true"] { font-weight:700; }
+.status-btn.full[aria-pressed="true"]  { background:#dcfce7; border-color:#22c55e; color:#14532d; }
+.status-btn.mid[aria-pressed="true"]   { background:#fef9c3; border-color:#eab308; color:#713f12; }
+.status-btn.low[aria-pressed="true"]   { background:#ffedd5; border-color:#f97316; color:#7c2d12; }
+.status-btn.empty[aria-pressed="true"] { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
 
 /* Non-interactive chips for locked mode */
 .status-chip {
@@ -104,6 +109,41 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 .status-chip.low   { background:#ffedd5; border-color:#f97316; color:#7c2d12; }
 .status-chip.empty { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
 .status-chip.none  { background:#f1f5f9; border-color:#cbd5e1; color:#475569; }
+
+/* Convert buttons (unlocked only) */
+.convert-btn {
+  border:1px dashed #94a3b8;
+  background:#f8fafc;
+  color:#475569;
+  border-radius:4px;
+  padding:4px 8px;
+  font-size:.75rem;
+}
+
+/* Add-item popover */
+.popover {
+  position:absolute;
+  z-index: 999;
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:8px;
+  box-shadow: 0 8px 20px rgba(0,0,0,.08);
+  padding:6px;
+  min-width: 180px;
+}
+.popover-item {
+  display:block;
+  width:100%;
+  text-align:left;
+  padding:8px 10px;
+  border:none;
+  background:transparent;
+  border-radius:6px;
+}
+.popover-item:hover,
+.popover-item:focus {
+  background:#f1f5f9;
+}
 
 /* ===== iPhone portrait tweaks ===== */
 @media (max-width: 430px) {

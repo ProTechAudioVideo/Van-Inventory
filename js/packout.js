@@ -1,5 +1,6 @@
 // js/packout.js
-// Packout pages with lock/unlock view mode, per-item status, expand/collapse.
+// Packout pages with Lock/Unlock, two item types (qty | status),
+// add-item popover chooser, per-item convert, and expand/collapse.
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import {
@@ -44,7 +45,7 @@ const setCollapsed = (id, val) => {
   else localStorage.removeItem(collapseKey(id));
 };
 
-// Lock state: default LOCKED, never persisted (always locks on reload/nav)
+// Lock state: default LOCKED, no persistence
 let locked = true;
 function setLockUI() {
   document.body.classList.toggle('locked', locked);
@@ -53,7 +54,6 @@ function setLockUI() {
     toggleLockBtn.setAttribute('aria-pressed', (!locked).toString());
     toggleLockBtn.setAttribute('aria-label', locked ? 'Unlock editing' : 'Lock view');
   }
-  // top-level add button
   if (addFolderBtn) addFolderBtn.style.display = locked ? 'none' : '';
 }
 
@@ -76,6 +76,47 @@ async function loadAll() {
 async function ensureFolder(id, data) { await setDoc(doc(colRef, id), data, { merge: true }); }
 async function saveItems(folderId, items) { await updateDoc(doc(colRef, folderId), { items }); }
 async function deleteFolder(folderId) { await deleteDoc(doc(colRef, folderId)); }
+
+// Popover helper
+let openPopover = null;
+function showAddPopover(anchorEl, onPick) {
+  closePopover(); // one at a time
+  const pop = document.createElement('div');
+  pop.className = 'popover';
+  pop.role = 'dialog';
+  pop.innerHTML = `
+    <button class="popover-item" data-kind="qty">➕ Quantity item</button>
+    <button class="popover-item" data-kind="status">🏷️ Status item</button>
+  `;
+  document.body.appendChild(pop);
+  // position near anchor
+  const r = anchorEl.getBoundingClientRect();
+  pop.style.top = `${window.scrollY + r.bottom + 6}px`;
+  // align right edge to anchor right so it doesn't overflow on mobile
+  pop.style.left = `${window.scrollX + r.right - pop.offsetWidth}px`;
+  requestAnimationFrame(() => {
+    pop.style.left = `${window.scrollX + r.right - pop.offsetWidth}px`;
+  });
+  const onDocClick = (e) => {
+    if (!pop.contains(e.target) && e.target !== anchorEl) closePopover();
+  };
+  document.addEventListener('click', onDocClick, { capture: true });
+  pop.addEventListener('click', (e) => {
+    const btn = e.target.closest('.popover-item');
+    if (!btn) return;
+    const kind = btn.dataset.kind;
+    onPick(kind);
+    closePopover();
+  });
+  openPopover = { pop, onDocClick };
+}
+function closePopover() {
+  if (openPopover) {
+    document.removeEventListener('click', openPopover.onDocClick, { capture: true });
+    openPopover.pop.remove();
+    openPopover = null;
+  }
+}
 
 // Render
 function render(data) {
@@ -101,22 +142,33 @@ function render(data) {
     title.textContent = folder.name || '(untitled)';
     header.appendChild(title);
 
+    // Add item / delete folder (only unlocked)
+    let addItemBtn = null;
     if (!locked) {
-      const addItemBtn = document.createElement('button');
+      addItemBtn = document.createElement('button');
       addItemBtn.textContent = '+';
       addItemBtn.title = 'Add item';
-      addItemBtn.addEventListener('click', async () => {
-        const items = Array.isArray(folder.items) ? folder.items.slice() : [];
-        items.push({ name: '', qty: 0 }); // default: no status
-        await saveItems(folderId, items);
-        await init();
+      addItemBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        // show two-option popover
+        showAddPopover(addItemBtn, async (kind) => {
+          const items = Array.isArray(folder.items) ? folder.items.slice() : [];
+          if (kind === 'status') {
+            items.push({ kind: 'status', name: '' }); // no status selected initially
+          } else {
+            items.push({ kind: 'qty',    name: '', qty: 0 });
+          }
+          await saveItems(folderId, items);
+          await init();
+        });
       });
       header.appendChild(addItemBtn);
 
       const delFolderBtn = document.createElement('button');
       delFolderBtn.textContent = 'Delete';
       delFolderBtn.className = 'delete-btn';
-      delFolderBtn.addEventListener('click', async () => {
+      delFolderBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
         if (confirm('Delete this folder and all its items?')) {
           await deleteFolder(folderId);
           await init();
@@ -140,14 +192,22 @@ function render(data) {
       caret.setAttribute('aria-label', newCollapsed ? 'Expand folder' : 'Collapse folder');
       caret.setAttribute('aria-expanded', (!newCollapsed).toString());
       setCollapsed(folderId, newCollapsed);
+      closePopover();
     }
     caret.addEventListener('click', toggleCollapse);
     title.addEventListener('click', toggleCollapse);
 
     const items = Array.isArray(folder.items) ? folder.items.slice() : [];
 
+    const normalizeKind = (item) => {
+      if (item.kind === 'qty' || item.kind === 'status') return item.kind;
+      // autodetect legacy
+      return STATUS_ORDER.includes(item.status) ? 'status' : 'qty';
+    };
+
     const pushRow = (item, index) => {
-      const active = STATUS_ORDER.includes(item.status) ? item.status : null;
+      const kind = normalizeKind(item);
+      const statusActive = STATUS_ORDER.includes(item.status) ? item.status : null;
 
       const row = document.createElement('div');
       row.className = 'row';
@@ -160,6 +220,7 @@ function render(data) {
         const delBtn = document.createElement('button');
         delBtn.textContent = '🗑️';
         delBtn.className = 'delete-btn';
+        delBtn.title = 'Delete item';
         delBtn.addEventListener('click', async () => {
           items.splice(index, 1);
           await saveItems(folderId, items);
@@ -168,7 +229,7 @@ function render(data) {
         main.appendChild(delBtn);
       }
 
-      // Name: input (unlocked) or static text (locked)
+      // Name: input (unlocked) or static (locked)
       if (locked) {
         const nameText = document.createElement('span');
         nameText.className = 'name-text';
@@ -186,82 +247,113 @@ function render(data) {
         main.appendChild(nameI);
       }
 
-      // Qty: controls (unlocked) or static text (locked)
-      if (locked) {
-        const qtyText = document.createElement('span');
-        qtyText.className = 'qty-text';
-        qtyText.textContent = String(item.qty || 0);
-        main.appendChild(qtyText);
-      } else {
-        const minus = document.createElement('button');
-        minus.textContent = '−';
-        minus.addEventListener('click', async (e) => {
-          e.preventDefault();
-          const v = Math.max(0, (item.qty || 0) - 1);
-          items[index].qty = v;
-          qty.value = v;
-          await saveItems(folderId, items);
-        });
-        main.appendChild(minus);
+      // Right side depends on kind + lock
+      if (kind === 'qty') {
+        if (locked) {
+          const qtyText = document.createElement('span');
+          qtyText.className = 'qty-text';
+          qtyText.textContent = String(item.qty ?? 0);
+          main.appendChild(qtyText);
+        } else {
+          const minus = document.createElement('button');
+          minus.textContent = '−';
+          minus.title = 'Decrement';
+          minus.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const v = Math.max(0, (item.qty || 0) - 1);
+            items[index].qty = v;
+            qty.value = v;
+            await saveItems(folderId, items);
+          });
+          main.appendChild(minus);
 
-        const qty = document.createElement('input');
-        qty.type = 'number';
-        qty.min = '0';
-        qty.value = item.qty || 0;
-        qty.addEventListener('change', async () => {
-          items[index].qty = Math.max(0, parseInt(qty.value || '0', 10));
-          qty.value = items[index].qty;
-          await saveItems(folderId, items);
-        });
-        main.appendChild(qty);
+          const qty = document.createElement('input');
+          qty.type = 'number';
+          qty.min = '0';
+          qty.value = item.qty || 0;
+          qty.addEventListener('change', async () => {
+            items[index].qty = Math.max(0, parseInt(qty.value || '0', 10));
+            qty.value = items[index].qty;
+            await saveItems(folderId, items);
+          });
+          main.appendChild(qty);
 
-        const plus = document.createElement('button');
-        plus.textContent = '+';
-        plus.addEventListener('click', async (e) => {
-          e.preventDefault();
-          const v = (item.qty || 0) + 1;
-          items[index].qty = v;
-          qty.value = v;
-          await saveItems(folderId, items);
-        });
-        main.appendChild(plus);
+          const plus = document.createElement('button');
+          plus.textContent = '+';
+          plus.title = 'Increment';
+          plus.addEventListener('click', async (e) => {
+            e.preventDefault();
+            const v = (item.qty || 0) + 1;
+            items[index].qty = v;
+            qty.value = v;
+            await saveItems(folderId, items);
+          });
+          main.appendChild(plus);
+
+          // Convert control
+          const convert = document.createElement('button');
+          convert.className = 'convert-btn';
+          convert.title = 'Convert to status item';
+          convert.textContent = '→ Status';
+          convert.addEventListener('click', async () => {
+            delete items[index].qty;
+            items[index].kind = 'status';
+            // leave status unset (null) by default
+            await saveItems(folderId, items);
+            await init();
+          });
+          main.appendChild(convert);
+        }
+      } else { // kind === 'status'
+        if (locked) {
+          const chip = document.createElement('span');
+          chip.className = `status-chip ${statusActive || 'none'}`;
+          chip.textContent = statusActive ? (STATUS_LABEL[statusActive] || statusActive) : '—';
+          main.appendChild(chip);
+        } else {
+          const statusBar = document.createElement('div');
+          statusBar.className = 'status-bar';
+
+          const setStatus = async (k) => {
+            const current = STATUS_ORDER.includes(items[index].status) ? items[index].status : null;
+            const next = (current === k) ? null : k; // toggle off if same
+            if (next) items[index].status = next; else delete items[index].status;
+            await saveItems(folderId, items);
+            await init();
+          };
+
+          STATUS_ORDER.forEach(k => {
+            const btn = document.createElement('button');
+            btn.className = `status-btn ${k}`;
+            const pressed = statusActive === k;
+            btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+            btn.textContent = STATUS_LABEL[k];
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              await setStatus(k);
+            });
+            statusBar.appendChild(btn);
+          });
+
+          main.appendChild(statusBar);
+
+          // Convert control
+          const convert = document.createElement('button');
+          convert.className = 'convert-btn';
+          convert.title = 'Convert to quantity item';
+          convert.textContent = '→ Qty';
+          convert.addEventListener('click', async () => {
+            delete items[index].status;
+            items[index].kind = 'qty';
+            items[index].qty = 0;
+            await saveItems(folderId, items);
+            await init();
+          });
+          main.appendChild(convert);
+        }
       }
 
       row.appendChild(main);
-
-      // Status: buttons (unlocked) or non-interactive chip (locked)
-      const statusRow = document.createElement('div');
-      statusRow.className = 'status-bar';
-
-      if (locked) {
-        const chip = document.createElement('span');
-        const kind = active;
-        chip.className = `status-chip ${kind || 'none'}`;
-        chip.textContent = kind ? (STATUS_LABEL[kind] || kind) : '—';
-        statusRow.appendChild(chip);
-      } else {
-        const setStatus = async (kind) => {
-          const current = STATUS_ORDER.includes(items[index].status) ? items[index].status : null;
-          const next = (current === kind) ? null : kind; // toggle off if same
-          if (next) items[index].status = next; else delete items[index].status;
-          await saveItems(folderId, items);
-          await init();
-        };
-        STATUS_ORDER.forEach(kind => {
-          const btn = document.createElement('button');
-          btn.className = `status-btn ${kind}`;
-          const pressed = active === kind;
-          btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
-          btn.textContent = STATUS_LABEL[kind];
-          btn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            await setStatus(kind);
-          });
-          statusRow.appendChild(btn);
-        });
-      }
-
-      row.appendChild(statusRow);
       list.appendChild(row);
     };
 
@@ -294,12 +386,14 @@ toggleLockBtn?.addEventListener('click', () => {
   locked = !locked;
   setLockUI();
   init();
+  closePopover();
 });
 
-// Always lock on navigation away (explicit per your spec)
+// Always lock on navigation away
 window.addEventListener('beforeunload', () => {
   locked = true;
   setLockUI();
+  closePopover();
 });
 
 // Boot
