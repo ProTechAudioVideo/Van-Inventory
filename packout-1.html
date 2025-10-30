@@ -1,4 +1,3 @@
-<!-- packout-1.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,18 +10,23 @@
   <header>
     <h1>Packout 1</h1>
     <p style="font-size:0.9em;">
+      <a href="packout-1.html">Packout 1</a> |
       <a href="packout-2.html">Packout 2</a> |
       <a href="packout-3.html">Packout 3</a>
     </p>
   </header>
 
-  <div style="display:flex; gap:8px; align-items:center; margin:8px 0;">
-    <button id="add-folder">+ Add Folder</button>
-    <button id="download-json">⤓ Download JSON</button>
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <button id="add-folder">+ Add Folder</button>
+      <button id="download-json">⤓ Download JSON</button>
+    </div>
+    <div class="toolbar-right">
+      <button id="toggle-lock" aria-pressed="false">Unlock</button>
+    </div>
   </div>
 
-  <!-- IMPORTANT: packout.js now looks for this first -->
-  <div id="packout-container"></div>
+  <div id="page-container"></div>
 
   <script type="module" src="js/packout.js"></script>
 </body>
