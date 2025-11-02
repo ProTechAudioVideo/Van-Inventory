@@ -11,201 +11,145 @@ button { cursor:pointer; }
 
 /* ===== Toolbar ===== */
 .toolbar {
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:8px;
-  margin:8px 0;
+  display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0;
 }
-.toolbar-left { display:flex; gap:8px; align-items:center; }
-.toolbar-right { display:flex; gap:8px; align-items:center; }
+.toolbar-left, .toolbar-right { display:flex; gap:8px; align-items:center; }
 #add-folder, #download-json, #toggle-lock { padding:6px 10px; }
 #toggle-lock { border:1px solid #94a3b8; background:#f1f5f9; border-radius:6px; }
-#add-folder { display:inline-flex; } /* JS hides this when locked */
 
 /* ===== Folder header (caret) ===== */
 .folder { display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600; }
 .folder-title { flex:1; user-select:none; }
-
-/* Editable folder title (unlocked mode) */
 .folder-title.editable { cursor:text; border-bottom:1px dashed transparent; }
 .folder-title.editable:hover { border-bottom-color:#cbd5e1; }
-
-/* Inline title input when renaming */
 .folder-title-input {
-  font: inherit;
-  font-weight: 600;
-  padding: 4px 6px;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  min-width: 8ch;
+  font: inherit; font-weight:600; padding:4px 6px; border:1px solid #cbd5e1; border-radius:4px; min-width:8ch;
 }
-
 .caret {
   width:26px; height:26px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;
   display:inline-flex; align-items:center; justify-content:center; line-height:1; font-size:16px;
 }
 .caret:focus { outline:2px solid #0ea5e9; outline-offset:2px; }
 .delete-btn {
-  background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; border-radius:4px;
-  padding:4px 6px; font-size:.9rem;
+  background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; border-radius:4px; padding:4px 6px; font-size:.9rem;
 }
 
-/* ===== Items list ===== */
+/* ===== Items container ===== */
 .folder-items { margin:8px 0 16px 34px; }
 .folder.collapsed + .folder-items { display:none; }
 
-/* ===== Item rows ===== */
-.row { display:flex; flex-direction:column; gap:6px; margin:8px 0; }
-.row-main { display:flex; align-items:center; gap:8px; flex-wrap:nowrap; }
-.row-main > * { flex: 0 0 auto; }
+/* ===== Row: TWO-ZONE LAYOUT ===== */
+/* configurable control-bay width */
+:root { --bay-w: 220px; }
+@media (max-width: 430px) { :root { --bay-w: 180px; } }
 
-/* Name input + static text */
-.row input[type="text"]{
-  min-width:0;
-  flex:1 1 auto;
-  padding:6px 8px;
-}
-.name-text {
-  flex:1 1 auto;
-  padding:6px 8px;
-  background:#fff;
-  border:1px solid #e5e7eb;
-  border-radius:4px;
+.row {
+  display:grid;
+  grid-template-columns: 1fr var(--bay-w);
+  gap:8px;
+  align-items:center;
+  margin:8px 0;
 }
 
-/* Qty input + static number */
+/* Left zone (trash + name) */
+.row-left{
+  display:flex; align-items:center; gap:8px; min-width:0;
+}
+.row-left input[type="text"]{
+  min-width:0; flex:1 1 auto; padding:6px 8px;
+}
+.name-text{
+  flex:1 1 auto; padding:6px 8px; background:#fff; border:1px solid #e5e7eb; border-radius:4px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+
+/* Right zone (control bay) */
+.control-bay{
+  display:grid;
+  grid-template-columns: 1fr auto;   /* controls | handle */
+  align-items:center;
+  width:100%;
+}
+.locked .control-bay{ grid-template-columns: 1fr; } /* center control with no handle */
+.controls{ justify-self:center; }                   /* center controls within bay */
+
+/* Generic inputs/buttons inside rows */
+.row button{ padding:4px 8px; }
 input[type="number"]{
-  width:2.8em;
-  text-align:center;
-  -moz-appearance:textfield;
-  appearance:textfield;
-  padding:6px 6px;
+  width:2.8em; text-align:center; -moz-appearance:textfield; appearance:textfield; padding:6px 6px;
 }
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
 
 .qty-text{
-  min-width:2.35em;
-  text-align:center;
-  padding:6px 6px;
-  border:1px solid #e5e7eb;
-  border-radius:4px;
-  background:#fff;
+  min-width:2.35em; text-align:center; padding:6px 6px; border:1px solid #e5e7eb; border-radius:4px; background:#fff;
 }
 
-/* ===== Length input and display ===== */
-.len-group { display:flex; align-items:center; gap:4px; }
-.len-input {
-  width:3.8em;
-  text-align:center;
-  -moz-appearance:textfield;
-  appearance:textfield;
-  padding:6px 6px;
-}
+/* Length */
+.len-group{ display:flex; align-items:center; gap:4px; }
+.len-input{ width:3.8em; text-align:center; -moz-appearance:textfield; appearance:textfield; padding:6px 6px; }
 .len-input::-webkit-outer-spin-button,
 .len-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
-.unit { font-size:.9rem; color:#334155; }
-.len-text {
-  min-width:max(3.2em, 2.35em);
-  text-align:center;
-  padding:6px 6px;
-  border:1px solid #e5e7eb;
-  border-radius:4px;
-  background:#fff;
+.unit{ font-size:.9rem; color:#334155; }
+.len-text{
+  min-width:max(3.2em, 2.35em); text-align:center; padding:6px 6px; border:1px solid #e5e7eb; border-radius:4px; background:#fff;
 }
 
-/* Buttons in rows */
-.row button { padding:4px 8px; }
-
-/* ===== Status (chips in locked mode) ===== */
-.status-chip {
-  display:inline-block;
-  border:1px solid #cbd5e1;
-  background:#f8fafc;
-  color:#0f172a;
-  border-radius:999px;
-  padding:2px 10px;
-  font-size:.75rem;
+/* Status chips & picker */
+.status-chip{
+  display:inline-block; border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a;
+  border-radius:999px; padding:2px 10px; font-size:.75rem;
 }
-.status-chip.filled { background:#dbeafe; border-color:#60a5fa; color:#1e3a8a; }  /* Blue */
-.status-chip.good   { background:#dcfce7; border-color:#22c55e; color:#14532d; }  /* Green */
-.status-chip.refill { background:#fef9c3; border-color:#eab308; color:#713f12; }  /* Yellow */
-.status-chip.empty  { background:#fee2e2; border-color:#ef4444; color:#991b1b; }  /* Red */
+.status-chip.filled { background:#dbeafe; border-color:#60a5fa; color:#1e3a8a; }
+.status-chip.good   { background:#dcfce7; border-color:#22c55e; color:#14532d; }
+.status-chip.refill { background:#fef9c3; border-color:#eab308; color:#713f12; }
+.status-chip.empty  { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
 .status-chip.none   { background:#f1f5f9; border-color:#cbd5e1; color:#475569; }
 
-/* ===== Status (picker button in unlocked mode) ===== */
-.status-picker {
-  border:1px solid #cbd5e1;
-  background:#f8fafc;
-  color:#0f172a;
-  border-radius:4px;
-  padding:4px 10px;
-  font-size:.8rem;
+.status-picker{
+  border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; border-radius:4px; padding:4px 10px; font-size:.8rem;
 }
-.status-picker.filled { background:#dbeafe; border-color:#60a5fa; color:#1e3a8a; }  /* Blue */
-.status-picker.good   { background:#dcfce7; border-color:#22c55e; color:#14532d; }  /* Green */
-.status-picker.refill { background:#fef9c3; border-color:#eab308; color:#713f12; }  /* Yellow */
-.status-picker.empty  { background:#fee2e2; border-color:#ef4444; color:#991b1b; }  /* Red */
-.status-picker.none   { /* default look */ }
+.status-picker.filled { background:#dbeafe; border-color:#60a5fa; color:#1e3a8a; }
+.status-picker.good   { background:#dcfce7; border-color:#22c55e; color:#14532d; }
+.status-picker.refill { background:#fef9c3; border-color:#eab308; color:#713f12; }
+.status-picker.empty  { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
+.status-picker.none   {}
 
-/* ===== Popovers (add-item + status) ===== */
-.popover {
-  position:absolute;
-  z-index:999;
-  background:#fff;
-  border:1px solid #e5e7eb;
-  border-radius:8px;
-  box-shadow:0 8px 20px rgba(0,0,0,.08);
-  padding:6px;
-  min-width:180px;
+/* Popovers */
+.popover{
+  position:absolute; z-index:999; background:#fff; border:1px solid #e5e7eb; border-radius:8px;
+  box-shadow:0 8px 20px rgba(0,0,0,.08); padding:6px; min-width:180px;
 }
-.popover-item {
-  display:block;
-  width:100%;
-  text-align:left;
-  padding:8px 10px;
-  border:none;
-  background:transparent;
-  border-radius:6px;
+.popover-item{
+  display:block; width:100%; text-align:left; padding:8px 10px; border:none; background:transparent; border-radius:6px;
 }
-.popover-item:hover,
-.popover-item:focus { background:#f1f5f9; }
-.popover-item.selected { background:#e2e8f0; }
+.popover-item:hover, .popover-item:focus{ background:#f1f5f9; }
+.popover-item.selected{ background:#e2e8f0; }
 
-/* ===== Drag handle + drag visuals ===== */
-.drag-handle {
-  width:26px; height:26px;
-  border:1px solid #cbd5e1; border-radius:4px; background:#fff;
-  display:inline-flex; align-items:center; justify-content:center;
-  position:relative;
-  margin-left:auto;            /* push handle to FAR RIGHT */
+/* Drag handle + drag visuals */
+.drag-handle{
+  width:26px; height:26px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;
+  display:inline-flex; align-items:center; justify-content:center; position:relative; justify-self:end;
 }
 .drag-handle::before,
-.drag-handle::after {
+.drag-handle::after{
   content:""; position:absolute; left:6px; right:6px; height:2px; background:#94a3b8;
-  box-shadow: 0 6px 0 #94a3b8, 0 -6px 0 #94a3b8; /* 3 bars total */
-  top:50%; transform:translateY(-50%);
+  box-shadow: 0 6px 0 #94a3b8, 0 -6px 0 #94a3b8; top:50%; transform:translateY(-50%);
 }
-.drag-ghost {
-  position:absolute; z-index:1000; pointer-events:none;
-  background:#fff; border:1px solid #94a3b8; border-radius:8px;
-  box-shadow:0 10px 24px rgba(0,0,0,.15);
-  opacity:.95;
+.drag-ghost{
+  position:absolute; z-index:1000; pointer-events:none; background:#fff; border:1px solid #94a3b8; border-radius:8px;
+  box-shadow:0 10px 24px rgba(0,0,0,.15); opacity:.95;
 }
-.drag-placeholder {
-  border:2px dashed #94a3b8; border-radius:8px; margin:4px 0;
+.drag-placeholder{ border:2px dashed #94a3b8; border-radius:8px; margin:4px 0; }
+
+/* iPhone portrait tweaks */
+@media (max-width:430px){
+  body{ margin:12px; }
+  .caret, .drag-handle{ width:22px; height:22px; }
+  .folder-items{ margin-left:18px; }
+  input[type="number"]{ width:2.35em; padding:6px 4px; }
+  .len-input{ width:3.4em; padding:6px 4px; }
 }
 
-/* ===== iPhone portrait tweaks ===== */
-@media (max-width: 430px) {
-  body { margin:12px; }
-  .caret, .drag-handle { width:22px; height:22px; }
-  .folder-items { margin-left:18px; }
-  .row-main { gap:6px; }
-  input[type="number"] { width:2.35em; padding:6px 4px; }
-  .len-input { width:3.4em; padding:6px 4px; }
-}
-
-/* Guard against phantom overflow */
-.container, .folder, .row, .row-main { max-width:100%; }
+/* Hide edit affordances while locked (JS also toggles display for add/download) */
+.locked .delete-btn.item { display:none; }
