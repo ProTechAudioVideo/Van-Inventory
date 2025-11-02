@@ -2,123 +2,120 @@
 
 /* ===== Base / reset ===== */
 * { box-sizing: border-box; }
-html, body { max-width: 100%; overflow-x: hidden; }
-html { -webkit-text-size-adjust: 100%; }
-body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; margin:16px; }
+html, body { max-width:100%; overflow-x:hidden; }
+html { -webkit-text-size-adjust:100%; }
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin:16px; }
 h1 { margin:0 0 8px; }
 a { color:#064e3b; }
 button { cursor:pointer; }
 
 /* ===== Toolbar ===== */
-.toolbar {
-  display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0;
-}
+.toolbar { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:8px 0; }
 .toolbar-left, .toolbar-right { display:flex; gap:8px; align-items:center; }
 #add-folder, #download-json, #toggle-lock { padding:6px 10px; }
 #toggle-lock { border:1px solid #94a3b8; background:#f1f5f9; border-radius:6px; }
 
-/* ===== Folder header (caret) ===== */
-.folder { display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600; }
-.folder-title { flex:1; user-select:none; }
-.folder-title.editable { cursor:text; border-bottom:1px dashed transparent; }
-.folder-title.editable:hover { border-bottom-color:#cbd5e1; }
-.folder-title-input {
-  font: inherit; font-weight:600; padding:4px 6px; border:1px solid #cbd5e1; border-radius:4px; min-width:8ch;
+/* ===== Shared sizing (leave layout as is) */
+:root { --bay-w: 220px; }
+@media (max-width:430px){ :root { --bay-w: 180px; } }
+
+/* ===== Folder header (aligned with rows) */
+.folder {
+  display:grid;
+  grid-template-columns: 26px 1fr var(--bay-w); /* caret | title | actions */
+  align-items:center;
+  gap:8px;
+  margin-top:14px;
+  font-weight:600;
 }
 .caret {
   width:26px; height:26px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;
   display:inline-flex; align-items:center; justify-content:center; line-height:1; font-size:16px;
 }
 .caret:focus { outline:2px solid #0ea5e9; outline-offset:2px; }
-.delete-btn {
-  background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; border-radius:4px; padding:4px 6px; font-size:.9rem;
-}
+.folder-title { user-select:none; min-width:0; }
+.folder-title.editable { cursor:text; border-bottom:1px dashed transparent; }
+.folder-title.editable:hover { border-bottom-color:#cbd5e1; }
+.folder-title-input { font:inherit; font-weight:600; padding:4px 6px; border:1px solid #cbd5e1; border-radius:4px; min-width:8ch; }
+.folder-actions { display:flex; justify-content:flex-end; align-items:center; gap:8px; width:100%; }
+.delete-btn { background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; border-radius:4px; padding:4px 6px; font-size:.9rem; }
 
 /* ===== Items container ===== */
 .folder-items { margin:8px 0 16px 34px; }
 .folder.collapsed + .folder-items { display:none; }
 
-/* ===== Row: TWO-ZONE LAYOUT ===== */
-:root { --bay-w: 220px; }
-@media (max-width: 430px) { :root { --bay-w: 180px; } }
-
+/* ===== Row: two-zone layout (left grows, right fixed) */
 .row {
   display:grid;
-  grid-template-columns: 1fr var(--bay-w);
+  grid-template-columns: minmax(0,1fr) var(--bay-w);
   gap:8px;
   align-items:center;
   margin:8px 0;
 }
 
-/* Left zone (trash + name) */
-.row-left{ display:flex; align-items:center; gap:8px; min-width:0; }
-.row-left input[type="text"]{ min-width:0; flex:1 1 auto; padding:6px 8px; }
-.name-text{
-  flex:1 1 auto; padding:6px 8px; background:#fff; border:1px solid #e5e7eb; border-radius:4px;
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-}
+/* Left zone */
+.row-left { display:flex; align-items:center; gap:8px; min-width:0; }
+.row-left input[type="text"] { min-width:0; flex:1 1 auto; padding:6px 8px; }
+.name-text { flex:1 1 auto; padding:6px 8px; background:#fff; border:1px solid #e5e7eb; border-radius:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
 /* Right zone (control bay) */
-.control-bay{
+.control-bay {
   display:grid;
   grid-template-columns: 1fr auto;   /* controls | handle */
   align-items:center;
   width:100%;
 }
-.locked .control-bay{ grid-template-columns: 1fr; }
-.controls{ justify-self:center; }
+.controls {
+  justify-self:center;
+  min-width:max-content;             /* don’t let controls shrink */
+}
+.locked .control-bay { grid-template-columns:1fr; justify-items:center; }
 
-/* Generic inputs/buttons inside rows */
-.row button{ padding:4px 8px; }
-input[type="number"]{
-  width:2.8em; text-align:center; -moz-appearance:textfield; appearance:textfield; padding:6px 6px;
+/* Generic numeric inputs */
+.row button { padding:4px 8px; }
+input[type="number"] {
+  width:2.8em;
+  text-align:center;
+  -moz-appearance:textfield; appearance:textfield;
+  padding:6px 6px;
 }
 input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
 
-.qty-text{
-  min-width:2.35em; text-align:center; padding:6px 6px; border:1px solid #e5e7eb; border-radius:4px; background:#fff;
-}
+.qty-text { min-width:2.35em; text-align:center; padding:6px 6px; border:1px solid #e5e7eb; border-radius:4px; background:#fff; }
 
 /* ===== Length ===== */
-.len-group{ display:flex; align-items:center; gap:4px; }
+.len-group { display:flex; align-items:center; gap:4px; }
 
-/* Wider box: show up to “12345.6” comfortably */
-.len-input{
-  width:7.5ch;                  /* was ~3.8em */
+/* ★ Wide enough to show 5+ digits (e.g., 12345 or 12345.6) */
+.len-input {
+  width:10ch;                        /* ← key change */
   text-align:center;
   -moz-appearance:textfield; appearance:textfield;
   padding:6px 6px;
 }
 .len-input::-webkit-outer-spin-button,
-.len-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+.len-input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
 
-.unit{ font-size:.9rem; color:#334155; }
+.unit { font-size:.9rem; color:#334155; }
 
-/* Locked view width to match the editable input */
-.len-text{
-  min-width:7.5ch;              /* was max(3.2em, 2.35em) */
+/* Locked view chip mirrors the editable width */
+.len-text {
+  min-width:10ch;                    /* ← match .len-input */
   text-align:center;
   padding:6px 6px;
-  border:1px solid #e5e7eb;
-  border-radius:4px;
-  background:#fff;
+  border:1px solid #e5e7eb; border-radius:4px; background:#fff;
 }
 
-/* Status chips & picker */
-.status-chip{
-  display:inline-block; border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a;
-  border-radius:999px; padding:2px 10px; font-size:.75rem;
-}
+/* ===== Status chips & picker (Filled/Good/Refill/Empty) */
+.status-chip { display:inline-block; border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; border-radius:999px; padding:2px 10px; font-size:.75rem; }
 .status-chip.filled { background:#dbeafe; border-color:#60a5fa; color:#1e3a8a; }
 .status-chip.good   { background:#dcfce7; border-color:#22c55e; color:#14532d; }
 .status-chip.refill { background:#fef9c3; border-color:#eab308; color:#713f12; }
 .status-chip.empty  { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
 .status-chip.none   { background:#f1f5f9; border-color:#cbd5e1; color:#475569; }
 
-.status-picker{
-  border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; border-radius:4px; padding:4px 10px; font-size:.8rem;
-}
+.status-picker { border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; border-radius:4px; padding:4px 10px; font-size:.8rem; }
 .status-picker.filled { background:#dbeafe; border-color:#60a5fa; color:#1e3a8a; }
 .status-picker.good   { background:#dcfce7; border-color:#22c55e; color:#14532d; }
 .status-picker.refill { background:#fef9c3; border-color:#eab308; color:#713f12; }
@@ -126,40 +123,31 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 .status-picker.none   {}
 
 /* Popovers */
-.popover{
-  position:absolute; z-index:999; background:#fff; border:1px solid #e5e7eb; border-radius:8px;
-  box-shadow:0 8px 20px rgba(0,0,0,.08); padding:6px; min-width:180px;
-}
-.popover-item{
-  display:block; width:100%; text-align:left; padding:8px 10px; border:none; background:transparent; border-radius:6px;
-}
-.popover-item:hover, .popover-item:focus{ background:#f1f5f9; }
-.popover-item.selected{ background:#e2e8f0; }
+.popover { position:absolute; z-index:999; background:#fff; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 8px 20px rgba(0,0,0,.08); padding:6px; min-width:180px; }
+.popover-item { display:block; width:100%; text-align:left; padding:8px 10px; border:none; background:transparent; border-radius:6px; }
+.popover-item:hover, .popover-item:focus { background:#f1f5f9; }
+.popover-item.selected { background:#e2e8f0; }
 
-/* Drag handle + drag visuals */
-.drag-handle{
+/* Drag visuals */
+.drag-handle {
   width:26px; height:26px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;
   display:inline-flex; align-items:center; justify-content:center; position:relative; justify-self:end;
 }
-.drag-handle::before,
-.drag-handle::after{
+.drag-handle::before, .drag-handle::after {
   content:""; position:absolute; left:6px; right:6px; height:2px; background:#94a3b8;
-  box-shadow: 0 6px 0 #94a3b8, 0 -6px 0 #94a3b8; top:50%; transform:translateY(-50%);
+  box-shadow:0 6px 0 #94a3b8, 0 -6px 0 #94a3b8; top:50%; transform:translateY(-50%);
 }
-.drag-ghost{
-  position:absolute; z-index:1000; pointer-events:none; background:#fff; border:1px solid #94a3b8; border-radius:8px;
-  box-shadow:0 10px 24px rgba(0,0,0,.15); opacity:.95;
-}
-.drag-placeholder{ border:2px dashed #94a3b8; border-radius:8px; margin:4px 0; }
+.drag-ghost { position:absolute; z-index:1000; pointer-events:none; background:#fff; border:1px solid #94a3b8; border-radius:8px; box-shadow:0 10px 24px rgba(0,0,0,.15); opacity:.95; }
+.drag-placeholder { border:2px dashed #94a3b8; border-radius:8px; margin:4px 0; }
 
-/* iPhone portrait tweaks */
+/* iPhone portrait tweaks (keep earlier sizes) */
 @media (max-width:430px){
   body{ margin:12px; }
   .caret, .drag-handle{ width:22px; height:22px; }
   .folder-items{ margin-left:18px; }
   input[type="number"]{ width:2.35em; padding:6px 4px; }
-  .len-input{ width:7.5ch; padding:6px 4px; }  /* keep the longer width on small screens too */
+  .len-input{ width:10ch; padding:6px 4px; }  /* keep wide length box */
 }
 
-/* Hide edit affordances while locked (JS also toggles display for add/download) */
+/* Locked mode: hide per-item delete (JS also hides add/download) */
 .locked .delete-btn.item { display:none; }

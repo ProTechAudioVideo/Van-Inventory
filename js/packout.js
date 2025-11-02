@@ -1,12 +1,12 @@
-// js/packout.js
-// Two-zone rows: [left(name+trash) | right(control-bay with centered control + right-pinned handle)]
-// Keeps all previous features: lock/unlock, add types, rename folders, status dropdown, confirm delete,
-// long-press drag (.25s), iPhone-friendly single line, etc.
+// /js/packout.js
+// Full file with: lock/unlock (defaults locked), "+ Add Item" popover (qty/status/length),
+// rename folders, confirm delete item, right-side drag handle (0.25s hold),
+// status labels Filled/Good/Refill/Empty, numeric keypad hints, and length classes len-input/len-text.
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import { getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js';
 
-/* Firebase config — project: protech-van-inventory-2025 */
+/* Use your actual config */
 const firebaseConfig = {
   apiKey: "AIzaSyDRMRiSsu0icqeWuxqaWXs-Ps2-3jS_DOg",
   authDomain: "protech-van-inventory-2025.firebaseapp.com",
@@ -24,20 +24,21 @@ const downloadBtn   = document.getElementById('download-json');
 const toggleLockBtn = document.getElementById('toggle-lock');
 const container =
   document.getElementById('packout-container') ||
-  document.getElementById('page-container');
-if (!container) throw new Error('Missing container div.');
+  document.getElementById('page-container') ||
+  document.body; // fallback
 
 // Collection key per page
 const pageKey = (document.body?.dataset?.packout) ||
-  (document.title || 'packout').toLowerCase().replace(/\s+/g, '-');
+  (document.title || 'packout').toLowerCase().replace(/\s+/g,'-');
 const colRef = collection(db, pageKey);
 
 // Collapse & lock state
 const collapseKey   = (id) => `packout:${pageKey}:collapsed:${id}`;
 const getCollapsed  = (id) => localStorage.getItem(collapseKey(id)) === '1';
-const setCollapsed  = (id, val) => { if (val) localStorage.setItem(collapseKey(id), '1'); else localStorage.removeItem(collapseKey(id)); };
+const setCollapsed  = (id, val) => { if (val) localStorage.setItem(collapseKey(id),'1'); else localStorage.removeItem(collapseKey(id)); };
 
-let locked = true;
+let locked = true; // default locked
+
 function setLockUI(){
   document.body.classList.toggle('locked', locked);
   if (toggleLockBtn){
@@ -48,7 +49,6 @@ function setLockUI(){
   if (downloadBtn)  downloadBtn.style.display  = locked ? 'none' : '';
 }
 
-// Status config (new labels/colors + legacy map)
 const STATUS_LABEL = { filled:'Filled', good:'Good', refill:'Refill', empty:'Empty' };
 const LEGACY_STATUS_MAP = { full:'filled', mid:'good', low:'refill', empty:'empty' };
 const canonicalStatus = (s)=> s ? (STATUS_LABEL[s] ? s : LEGACY_STATUS_MAP[s] || null) : null;
@@ -61,7 +61,7 @@ async function ensureFolder(id,data){ await setDoc(doc(colRef,id),data,{merge:tr
 async function saveItems(folderId,items){ await updateDoc(doc(colRef,folderId),{items}); }
 async function deleteFolder(folderId){ await deleteDoc(doc(colRef,folderId)); }
 
-// Popovers (reused)
+// Popovers
 let openPopover=null;
 function attachPopover(pop,anchor,onDocClick){
   document.body.appendChild(pop);
@@ -80,21 +80,19 @@ function closePopover(){
 }
 function showAddPopover(anchor,onPick){
   closePopover();
-  const pop=document.createElement('div');
-  pop.className='popover'; pop.role='dialog';
+  const pop=document.createElement('div'); pop.className='popover'; pop.role='dialog';
   pop.innerHTML=`
     <button class="popover-item" data-kind="qty">➕ Quantity item</button>
     <button class="popover-item" data-kind="status">🏷️ Status item</button>
     <button class="popover-item" data-kind="length">📏 Length item</button>
   `;
   const onDocClick=(e)=>{ if(!pop.contains(e.target) && e.target!==anchor) closePopover(); };
-  pop.addEventListener('click',(e)=>{ const btn=e.target.closest('.popover-item'); if(!btn) return; onPick(btn.dataset.kind); closePopover(); });
+  pop.addEventListener('click',(e)=>{ const b=e.target.closest('.popover-item'); if(!b) return; onPick(b.dataset.kind); closePopover(); });
   attachPopover(pop,anchor,onDocClick);
 }
 function showStatusPopover(anchor,current,onSelect){
   closePopover();
-  const pop=document.createElement('div');
-  pop.className='popover'; pop.role='listbox';
+  const pop=document.createElement('div'); pop.className='popover'; pop.role='listbox';
   pop.innerHTML=`
     <button class="popover-item" data-value="none">— None</button>
     <button class="popover-item" data-value="empty">${STATUS_LABEL.empty}</button>
@@ -110,7 +108,7 @@ function showStatusPopover(anchor,current,onSelect){
   attachPopover(pop,anchor,onDocClick);
 }
 
-// Drag to reorder (long press)
+// Drag to reorder (0.25s hold)
 const DRAG_HOLD_MS=250, MOVE_CANCEL_PX=6;
 let dragState=null;
 function makeGhost(row){ const r=row.getBoundingClientRect(); const g=row.cloneNode(true); g.classList.add('drag-ghost'); g.style.width=`${r.width}px`; g.style.height=`${r.height}px`; g.style.left=`${r.left+window.scrollX}px`; g.style.top=`${r.top+window.scrollY}px`; document.body.appendChild(g); return g; }
@@ -196,7 +194,10 @@ function render(data){
 
     if(!locked){
       title.title='Click to rename'; title.addEventListener('click',(e)=>{ e.stopPropagation(); startRenameFolder(folderId,folder,title); });
+      const actions=document.createElement('div'); actions.className='folder-actions';
+
       const addItemBtn=document.createElement('button'); addItemBtn.textContent='+ Add Item'; addItemBtn.title='Add item';
+      addItemBtn.id = `add-item-${folderId}`;
       addItemBtn.addEventListener('click', async (e)=>{
         e.stopPropagation();
         showAddPopover(addItemBtn, async(kind)=>{
@@ -207,11 +208,13 @@ function render(data){
           await saveItems(folderId,items); await init();
         });
       });
-      header.appendChild(addItemBtn);
+      actions.appendChild(addItemBtn);
 
       const delFolderBtn=document.createElement('button'); delFolderBtn.textContent='Delete'; delFolderBtn.className='delete-btn';
       delFolderBtn.addEventListener('click', async (e)=>{ e.stopPropagation(); if(confirm('Delete this folder and all its items?')){ await deleteFolder(folderId); await init(); }});
-      header.appendChild(delFolderBtn);
+      actions.appendChild(delFolderBtn);
+
+      header.appendChild(actions);
     } else {
       title.addEventListener('click',()=>toggleCollapse());
     }
@@ -237,7 +240,7 @@ function render(data){
       const kind=normalizeKind(item), statusActive=canonicalStatus(item.status);
       const row=document.createElement('div'); row.className='row';
 
-      // Left zone
+      // Left side
       const left=document.createElement('div'); left.className='row-left';
       if(!locked){
         const del=document.createElement('button'); del.textContent='🗑️'; del.className='delete-btn item'; del.title='Delete item';
@@ -257,7 +260,7 @@ function render(data){
         left.appendChild(inp);
       }
 
-      // Right zone (control bay)
+      // Right side
       const bay=document.createElement('div'); bay.className='control-bay';
       const controls=document.createElement('div'); controls.className='controls';
 
@@ -267,11 +270,7 @@ function render(data){
         }else{
           const minus=document.createElement('button'); minus.textContent='−'; minus.title='Decrement';
           const qty=document.createElement('input'); qty.type='number'; qty.min='0'; qty.value=item.qty||0;
-          // 🔢 Force mobile NUMERIC keypad for qty:
-          qty.setAttribute('inputmode','numeric');    // iOS/Android numeric keypad
-          qty.setAttribute('pattern','[0-9]*');       // Android fallback
-          qty.enterKeyHint = 'done';
-
+          qty.setAttribute('inputmode','numeric'); qty.setAttribute('pattern','[0-9]*'); qty.enterKeyHint='done';
           const plus=document.createElement('button'); plus.textContent='+'; plus.title='Increment';
           minus.addEventListener('click', async (e)=>{ e.preventDefault(); const v=Math.max(0,(item.qty||0)-1); items[index].qty=v; qty.value=v; await saveItems(folderId,items); });
           qty.addEventListener('change', async ()=>{ items[index].qty=Math.max(0, parseInt(qty.value||'0',10)); qty.value=items[index].qty; await saveItems(folderId,items); });
@@ -282,20 +281,21 @@ function render(data){
         if(locked){
           const chip=document.createElement('span'); chip.className=`status-chip ${statusActive||'none'}`; chip.textContent=statusActive?STATUS_LABEL[statusActive]:'—'; controls.appendChild(chip);
         }else{
-          const picker=document.createElement('button'); picker.className=`status-picker ${statusActive||'none'}`; picker.textContent=statusActive?STATUS_LABEL[statusActive]:'Set status';
+          const picker=document.createElement('button'); picker.className=`status-picker ${statusActive||'none'}`; picker.textContent=statusActive?STATUS_LABEL[statusActive]:'Filled'; // default label
           picker.addEventListener('click',(e)=>{ e.preventDefault(); showStatusPopover(picker, statusActive, async (v)=>{ if(v) items[index].status=v; else delete items[index].status; await saveItems(folderId,items); await init(); }); });
           controls.appendChild(picker);
         }
       } else { // length
         if(locked){
-          const t=document.createElement('span'); t.className='len-text'; t.textContent=(typeof item.lengthFt==='number')?`${item.lengthFt} ft`:'—'; controls.appendChild(t);
+          const t=document.createElement('span'); t.className='len-text';  // <<— ensures locked width matches
+          t.textContent=(typeof item.lengthFt==='number')?`${item.lengthFt} ft`:'—';
+          controls.appendChild(t);
         }else{
           const g=document.createElement('div'); g.className='len-group';
-          const inp=document.createElement('input'); inp.type='number'; inp.step='0.1'; inp.value=(typeof item.lengthFt==='number')?String(item.lengthFt):''; inp.className='len-input'; inp.placeholder='0.0';
-          // 🔢 Force mobile DECIMAL keypad for length:
-          inp.setAttribute('inputmode','decimal');
-          inp.enterKeyHint = 'done';
-
+          const inp=document.createElement('input'); inp.type='number'; inp.step='0.1'; inp.value=(typeof item.lengthFt==='number')?String(item.lengthFt):''; 
+          inp.classList.add('len-input');                           // <<— ensures editable width is wide
+          inp.placeholder='0.0';
+          inp.setAttribute('inputmode','decimal'); inp.enterKeyHint='done';
           const u=document.createElement('span'); u.className='unit'; u.textContent='ft';
           inp.addEventListener('change', async ()=>{ const v=parseFloat(inp.value); if(Number.isFinite(v)) items[index].lengthFt=v; else delete items[index].lengthFt; await saveItems(folderId,items); });
           g.append(inp,u); controls.appendChild(g);
@@ -304,17 +304,17 @@ function render(data){
 
       bay.appendChild(controls);
 
-      // Drag handle (right-pinned). Hidden in locked mode but layout stays centered via CSS.
+      // Drag handle (right side)
       const handle=document.createElement('button'); handle.className='drag-handle'; handle.title='Hold 0.25s to reorder';
       if(!locked){ attachDragHandle(handle, list, row, folderId, items, index); }
-      else { handle.style.display='none'; } // locked: remove handle; CSS centers controls
+      else { handle.style.display='none'; }
       bay.appendChild(handle);
 
       row.append(left, bay);
       list.appendChild(row);
     };
 
-    items.forEach(pushRow);
+    (Array.isArray(folder.items)?folder.items:[]).forEach(pushRow);
   });
 }
 
