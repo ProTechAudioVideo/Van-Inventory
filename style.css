@@ -17,31 +17,19 @@ button { cursor:pointer; }
 #add-folder, #download-json, #toggle-lock { padding:6px 10px; }
 #toggle-lock { border:1px solid #94a3b8; background:#f1f5f9; border-radius:6px; }
 
-/* ===== Shared sizing ===== */
-:root { --bay-w: 220px; }                 /* desktop/tablet */
-@media (max-width:430px){ :root { --bay-w: 230px; } } /* iPhone: give the bay a bit more room */
-
-/* ===== Folder header ===== */
-.folder {
-  display:grid;
-  grid-template-columns: 26px 1fr var(--bay-w); /* caret | title | actions */
-  align-items:center;
-  gap:8px;
-  margin-top:14px;
-  font-weight:600;
+/* ===== Folder header (caret) ===== */
+.folder { display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600; }
+.folder-title { flex:1; user-select:none; }
+.folder-title.editable { cursor:text; border-bottom:1px dashed transparent; }
+.folder-title.editable:hover { border-bottom-color:#cbd5e1; }
+.folder-title-input {
+  font: inherit; font-weight:600; padding:4px 6px; border:1px solid #cbd5e1; border-radius:4px; min-width:8ch;
 }
 .caret {
   width:26px; height:26px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;
   display:inline-flex; align-items:center; justify-content:center; line-height:1; font-size:16px;
 }
 .caret:focus { outline:2px solid #0ea5e9; outline-offset:2px; }
-.folder-title { user-select:none; min-width:0; }
-.folder-title.editable { cursor:text; border-bottom:1px dashed transparent; }
-.folder-title.editable:hover { border-bottom-color:#cbd5e1; }
-.folder-title-input {
-  font: inherit; font-weight:600; padding:4px 6px; border:1px solid #cbd5e1; border-radius:4px; min-width:8ch;
-}
-.folder-actions{ display:flex; justify-content:flex-end; align-items:center; gap:8px; width:100%; }
 .delete-btn {
   background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; border-radius:4px; padding:4px 6px; font-size:.9rem;
 }
@@ -51,9 +39,12 @@ button { cursor:pointer; }
 .folder.collapsed + .folder-items { display:none; }
 
 /* ===== Row: TWO-ZONE LAYOUT ===== */
+:root { --bay-w: 220px; }
+@media (max-width: 430px) { :root { --bay-w: 180px; } }
+
 .row {
   display:grid;
-  grid-template-columns: minmax(0,1fr) var(--bay-w); /* left grows, right fixed */
+  grid-template-columns: 1fr var(--bay-w);
   gap:8px;
   align-items:center;
   margin:8px 0;
@@ -70,17 +61,14 @@ button { cursor:pointer; }
 /* Right zone (control bay) */
 .control-bay{
   display:grid;
-  grid-template-columns: 1fr auto;      /* controls | handle */
+  grid-template-columns: 1fr auto;   /* controls | handle */
   align-items:center;
   width:100%;
 }
-.controls{
-  justify-self:center;
-  min-width:max-content;                 /* don’t let controls shrink below their content */
-}
-.locked .control-bay{ grid-template-columns: 1fr; justify-items:center; }
+.locked .control-bay{ grid-template-columns: 1fr; }
+.controls{ justify-self:center; }
 
-/* Generic inputs/buttons */
+/* Generic inputs/buttons inside rows */
 .row button{ padding:4px 8px; }
 input[type="number"]{
   width:2.8em; text-align:center; -moz-appearance:textfield; appearance:textfield; padding:6px 6px;
@@ -95,9 +83,9 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 /* ===== Length ===== */
 .len-group{ display:flex; align-items:center; gap:4px; }
 
-/* Wide enough to see 5 digits (e.g., “12345” or “12345.6”) */
+/* Wider box: show up to “12345.6” comfortably */
 .len-input{
-  width:9ch;                 /* increased from 7.5ch */
+  width:7.5ch;                  /* was ~3.8em */
   text-align:center;
   -moz-appearance:textfield; appearance:textfield;
   padding:6px 6px;
@@ -107,9 +95,9 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 
 .unit{ font-size:.9rem; color:#334155; }
 
-/* Locked view width to match editable input */
+/* Locked view width to match the editable input */
 .len-text{
-  min-width:9ch;             /* increased to mirror .len-input */
+  min-width:7.5ch;              /* was max(3.2em, 2.35em) */
   text-align:center;
   padding:6px 6px;
   border:1px solid #e5e7eb;
@@ -117,7 +105,7 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
   background:#fff;
 }
 
-/* ===== Status chips & picker ===== */
+/* Status chips & picker */
 .status-chip{
   display:inline-block; border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a;
   border-radius:999px; padding:2px 10px; font-size:.75rem;
@@ -137,7 +125,7 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 .status-picker.empty  { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
 .status-picker.none   {}
 
-/* ===== Popovers ===== */
+/* Popovers */
 .popover{
   position:absolute; z-index:999; background:#fff; border:1px solid #e5e7eb; border-radius:8px;
   box-shadow:0 8px 20px rgba(0,0,0,.08); padding:6px; min-width:180px;
@@ -148,7 +136,7 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 .popover-item:hover, .popover-item:focus{ background:#f1f5f9; }
 .popover-item.selected{ background:#e2e8f0; }
 
-/* ===== Drag visuals ===== */
+/* Drag handle + drag visuals */
 .drag-handle{
   width:26px; height:26px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;
   display:inline-flex; align-items:center; justify-content:center; position:relative; justify-self:end;
@@ -170,8 +158,8 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
   .caret, .drag-handle{ width:22px; height:22px; }
   .folder-items{ margin-left:18px; }
   input[type="number"]{ width:2.35em; padding:6px 4px; }
-  .len-input{ width:9ch; padding:6px 4px; }   /* keep wider width on small screens */
+  .len-input{ width:7.5ch; padding:6px 4px; }  /* keep the longer width on small screens too */
 }
 
-/* Locked mode: hide per-item delete (JS also hides add/download) */
+/* Hide edit affordances while locked (JS also toggles display for add/download) */
 .locked .delete-btn.item { display:none; }
