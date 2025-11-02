@@ -1,7 +1,7 @@
 // js/packout.js
 // Lock/Unlock view, qty|status|length items, add-item popover chooser,
-// per-item type cycle (keeps prior values), inline folder rename, expand/collapse,
-// and status picker dropdown (replaces 4 inline buttons).
+// inline folder rename, expand/collapse, status dropdown,
+// and long-press (2s) drag-to-reorder via a handle (touch + mouse).
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import {
@@ -56,10 +56,6 @@ function setLockUI() {
 // Helpers
 const STATUS_ORDER = ['empty', 'low', 'mid', 'full'];
 const STATUS_LABEL = { empty: 'Empty', low: 'Low', mid: 'Mid', full: 'Full' };
-
-const KIND_ORDER = ['qty', 'status', 'length'];
-const KIND_LABEL = { qty: 'Qty', status: 'Status', length: 'Length' };
-const nextKind = (k) => KIND_ORDER[(KIND_ORDER.indexOf(k) + 1) % KIND_ORDER.length];
 
 const slugify = (s) => (s || '')
   .toLowerCase().trim()
@@ -120,7 +116,6 @@ function showAddPopover(anchorEl, onPick) {
   attachPopover(pop, anchorEl, onDocClick);
 }
 
-// NEW: status picker dropdown
 function showStatusPopover(anchorEl, current, onSelect) {
   closePopover();
   const pop = document.createElement('div');
@@ -133,14 +128,11 @@ function showStatusPopover(anchorEl, current, onSelect) {
     <button class="popover-item" data-value="mid">Mid</button>
     <button class="popover-item" data-value="full">Full</button>
   `;
-  // visually indicate current
-  const markCurrent = () => {
-    pop.querySelectorAll('.popover-item').forEach(btn => {
-      const v = btn.dataset.value;
-      btn.classList.toggle('selected', v === current || (v === 'none' && !current));
-    });
-  };
-  markCurrent();
+  // Mark current
+  pop.querySelectorAll('.popover-item').forEach(btn => {
+    const v = btn.dataset.value;
+    btn.classList.toggle('selected', v === current || (v === 'none' && !current));
+  });
 
   const onDocClick = (e) => { if (!pop.contains(e.target) && e.target !== anchorEl) closePopover(); };
   pop.addEventListener('click', (e) => {
@@ -151,6 +143,187 @@ function showStatusPopover(anchorEl, current, onSelect) {
     closePopover();
   });
   attachPopover(pop, anchorEl, onDocClick);
+}
+
+// ===== Long-press drag-to-reorder (touch + mouse) =====
+const DRAG_HOLD_MS = 2000;    // 2 seconds
+const MOVE_CANCEL_PX = 6;     // cancel long-press if finger moves too much
+
+let dragState = null; // { folderId, items, listEl, rowEl, ghostEl, placeholderEl, startIndex, startY, offsetY, holdTimer }
+
+function makeGhost(rowEl) {
+  const r = rowEl.getBoundingClientRect();
+  const ghost = rowEl.cloneNode(true);
+  ghost.classList.add('drag-ghost');
+  ghost.style.width = `${r.width}px`;
+  ghost.style.height = `${r.height}px`;
+  ghost.style.left = `${r.left + window.scrollX}px`;
+  ghost.style.top  = `${r.top  + window.scrollY}px`;
+  document.body.appendChild(ghost);
+  return ghost;
+}
+
+function makePlaceholder(rowEl) {
+  const r = rowEl.getBoundingClientRect();
+  const ph = document.createElement('div');
+  ph.className = 'drag-placeholder';
+  ph.style.height = `${r.height}px`;
+  return ph;
+}
+
+function docY(e) {
+  if (e.touches && e.touches[0]) return e.touches[0].clientY + window.scrollY;
+  if (e.changedTouches && e.changedTouches[0]) return e.changedTouches[0].clientY + window.scrollY;
+  return e.clientY + window.scrollY;
+}
+
+function onMove(e) {
+  if (!dragState) return;
+  e.preventDefault();
+  const y = docY(e) - dragState.offsetY;
+  dragState.ghostEl.style.top = `${y}px`;
+
+  // Find insertion point
+  const rows = Array.from(dragState.listEl.querySelectorAll(':scope > .row'))
+    .filter(el => el !== dragState.rowEl); // original row hidden
+  let insertBefore = null;
+  const midY = y + dragState.ghostEl.offsetHeight / 2;
+
+  for (const candidate of rows) {
+    const cr = candidate.getBoundingClientRect();
+    const cMid = cr.top + window.scrollY + cr.height / 2;
+    if (midY < cMid) { insertBefore = candidate; break; }
+  }
+
+  if (insertBefore) {
+    dragState.listEl.insertBefore(dragState.placeholderEl, insertBefore);
+  } else {
+    dragState.listEl.appendChild(dragState.placeholderEl);
+  }
+}
+
+async function onUp(e) {
+  if (!dragState) return;
+  e.preventDefault();
+
+  // Compute new index
+  const children = Array.from(dragState.listEl.querySelectorAll(':scope > .row, :scope > .drag-placeholder'));
+  const phIndex = children.indexOf(dragState.placeholderEl);
+
+  // Clean up DOM
+  dragState.ghostEl.remove();
+  dragState.rowEl.style.visibility = '';
+  dragState.placeholderEl.remove();
+
+  const { folderId, items, startIndex } = dragState;
+  dragState = null;
+
+  if (phIndex < 0) return;
+
+  // Translate DOM index to items index (since we removed original row)
+  const newIndex = phIndex > startIndex ? phIndex : phIndex;
+
+  // Reorder items
+  const moved = items[startIndex];
+  const copy = items.slice();
+  copy.splice(startIndex, 1);
+  copy.splice(newIndex, 0, moved);
+
+  await saveItems(folderId, copy);
+  await init();
+}
+
+function cancelHoldTimer() {
+  if (dragState?.holdTimer) {
+    clearTimeout(dragState.holdTimer);
+    dragState.holdTimer = null;
+  }
+}
+
+function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
+  let startClientY = 0;
+
+  const beginDrag = () => {
+    // Create ghost and placeholder, hide original row
+    const ghost = makeGhost(rowEl);
+    const placeholder = makePlaceholder(rowEl);
+    rowEl.style.visibility = 'hidden';
+    rowEl.after(placeholder);
+
+    const r = rowEl.getBoundingClientRect();
+    dragState.ghostEl = ghost;
+    dragState.placeholderEl = placeholder;
+    dragState.offsetY = (startClientY + window.scrollY) - (r.top + window.scrollY);
+
+    // Global listeners
+    const moveEv = ('ontouchstart' in window) ? 'touchmove' : 'mousemove';
+    const upEv   = ('ontouchstart' in window) ? 'touchend'  : 'mouseup';
+
+    const _onMove = (e) => onMove(e);
+    const _onUp   = async (e) => {
+      document.removeEventListener(moveEv, _onMove, { passive:false });
+      document.removeEventListener(upEv, _onUp, { passive:false });
+      await onUp(e);
+    };
+
+    document.addEventListener(moveEv, _onMove, { passive:false });
+    document.addEventListener(upEv, _onUp, { passive:false });
+  };
+
+  const onPointerDown = (e) => {
+    if (locked) return;
+    // Don’t start if a popover is open
+    closePopover();
+
+    startClientY = (e.touches && e.touches[0] ? e.touches[0].clientY : e.clientY);
+
+    // Initialize dragState shell so move can cancel long-press if needed
+    dragState = {
+      folderId, items, listEl, rowEl,
+      ghostEl: null, placeholderEl: null,
+      startIndex: index,
+      startY: startClientY,
+      offsetY: 0,
+      holdTimer: setTimeout(() => {
+        // Start actual drag after HOLD
+        beginDrag();
+      }, DRAG_HOLD_MS)
+    };
+
+    const moveEv = ('ontouchstart' in window) ? 'touchmove' : 'mousemove';
+    const upEv   = ('ontouchstart' in window) ? 'touchend'  : 'mouseup';
+
+    const _cancelIfMoved = (ev) => {
+      const y = (ev.touches && ev.touches[0] ? ev.touches[0].clientY : ev.clientY);
+      if (Math.abs(y - dragState.startY) > MOVE_CANCEL_PX && !dragState.ghostEl) {
+        cancelHoldTimer();
+        dragState = null;
+        document.removeEventListener(moveEv, _cancelIfMoved, { passive:true });
+        document.removeEventListener(upEv, _cancelPress, { passive:true });
+      }
+    };
+
+    const _cancelPress = (ev) => {
+      if (!dragState) return;
+      if (!dragState.ghostEl) {
+        // released before hold completed
+        cancelHoldTimer();
+        dragState = null;
+      }
+      document.removeEventListener(moveEv, _cancelIfMoved, { passive:true });
+      document.removeEventListener(upEv, _cancelPress, { passive:true });
+    };
+
+    document.addEventListener(moveEv, _cancelIfMoved, { passive:true });
+    document.addEventListener(upEv, _cancelPress, { passive:true });
+
+    // Prevent text selection
+    e.preventDefault();
+  };
+
+  // Touch + mouse
+  handleBtn.addEventListener('touchstart', onPointerDown, { passive:false });
+  handleBtn.addEventListener('mousedown',  onPointerDown);
 }
 
 // ===== Inline rename helpers =====
@@ -311,6 +484,7 @@ function render(data) {
       main.className = 'row-main';
 
       if (!locked) {
+        // Delete item
         const delBtn = document.createElement('button');
         delBtn.textContent = '🗑️';
         delBtn.className = 'delete-btn';
@@ -321,6 +495,15 @@ function render(data) {
           await init();
         });
         main.appendChild(delBtn);
+
+        // DRAG HANDLE (replaces the "Type" button)
+        const handle = document.createElement('button');
+        handle.className = 'drag-handle';
+        handle.title = 'Hold 2s to reorder';
+        handle.setAttribute('aria-label', 'Reorder item (press and hold)');
+        // Visual: small square with 3 bars created in CSS
+        main.appendChild(handle);
+        attachDragHandle(handle, list, row, folderId, items, index);
       }
 
       // Name: input (unlocked) or static (locked)
@@ -441,20 +624,6 @@ function render(data) {
           lenGroup.appendChild(unit);
           main.appendChild(lenGroup);
         }
-      }
-
-      // Type cycle button (unlocked only) — keeps prior values
-      if (!locked) {
-        const cycle = document.createElement('button');
-        cycle.className = 'convert-btn';
-        cycle.title = 'Cycle item type';
-        cycle.textContent = `Type: ${KIND_LABEL[kind]}`;
-        cycle.addEventListener('click', async () => {
-          items[index].kind = nextKind(kind);
-          await saveItems(folderId, items);
-          await init();
-        });
-        main.appendChild(cycle);
       }
 
       row.appendChild(main);
