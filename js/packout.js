@@ -1,8 +1,7 @@
 // js/packout.js
 // Lock/Unlock view, qty|status|length items, add-item popover chooser,
 // inline folder rename, expand/collapse, status dropdown,
-// right-side long-press (0.25s) drag-to-reorder,
-// and inline popover confirmation for deleting an item.
+// and long-press (0.25s) drag-to-reorder via a right-side handle (touch + mouse).
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import {
@@ -63,11 +62,6 @@ const slugify = (s) => (s || '')
   .replace(/[^a-z0-9]+/g, '-')
   .replace(/(^-|-$)/g, '') || ('folder-' + Date.now());
 
-const escapeHtml = (s='') =>
-  s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
-const truncate = (s, n=30) => (!s ? '' : (s.length>n ? s.slice(0,n-1)+'…' : s));
-
 // Firestore helpers
 async function loadAll() {
   const out = {};
@@ -79,7 +73,7 @@ async function ensureFolder(id, data) { await setDoc(doc(colRef, id), data, { me
 async function saveItems(folderId, items) { await updateDoc(doc(colRef, folderId), { items }); }
 async function deleteFolder(folderId) { await deleteDoc(doc(colRef, folderId)); }
 
-// ===== Generic popover infra (add-item, status picker, confirm delete) =====
+// ===== Generic popover infra (re-used by add-item and status picker) =====
 let openPopover = null;
 
 function attachPopover(pop, anchorEl, onDocClick) {
@@ -150,38 +144,6 @@ function showStatusPopover(anchorEl, current, onSelect) {
   attachPopover(pop, anchorEl, onDocClick);
 }
 
-function showConfirmDeletePopover(anchorEl, itemName, onConfirm) {
-  closePopover();
-  const label = escapeHtml(truncate(itemName || '(no name)'));
-  const pop = document.createElement('div');
-  pop.className = 'popover confirm-popover';
-  pop.setAttribute('role', 'dialog');
-  pop.innerHTML = `
-    <div class="confirm-title">Delete <strong>${label}</strong>?</div>
-    <div class="popover-actions">
-      <button class="btn btn-secondary" type="button">Cancel</button>
-      <button class="btn btn-danger" type="button">Delete</button>
-    </div>
-  `;
-  const cancelBtn = pop.querySelector('.btn-secondary');
-  const deleteBtn = pop.querySelector('.btn-danger');
-
-  const onDocClick = (e) => {
-    if (!pop.contains(e.target) && e.target !== anchorEl) closePopover();
-  };
-  const onKey = (e) => {
-    if (e.key === 'Escape') { e.preventDefault(); closePopover(); }
-    else if (e.key === 'Enter') { e.preventDefault(); closePopover(); onConfirm(); }
-  };
-
-  cancelBtn.addEventListener('click', () => closePopover());
-  deleteBtn.addEventListener('click', () => { closePopover(); onConfirm(); });
-  pop.addEventListener('keydown', onKey);
-
-  attachPopover(pop, anchorEl, onDocClick);
-  deleteBtn.focus(); // Enter = Delete
-}
-
 // ===== Long-press drag-to-reorder (touch + mouse) =====
 const DRAG_HOLD_MS = 250;     // 0.25 seconds
 const MOVE_CANCEL_PX = 6;     // cancel long-press if finger moves too much
@@ -220,8 +182,9 @@ function onMove(e) {
   const y = docY(e) - dragState.offsetY;
   dragState.ghostEl.style.top = `${y}px`;
 
+  // Find insertion point
   const rows = Array.from(dragState.listEl.querySelectorAll(':scope > .row'))
-    .filter(el => el !== dragState.rowEl);
+    .filter(el => el !== dragState.rowEl); // original row hidden
   let insertBefore = null;
   const midY = y + dragState.ghostEl.offsetHeight / 2;
 
@@ -238,15 +201,18 @@ function onMove(e) {
   }
 }
 
+// --- FIX: no accidental shift when releasing without moving
 async function onUp(e) {
   if (!dragState) return;
   e.preventDefault();
 
+  // Determine new index among siblings, ignoring the hidden original row
   const ordered = Array.from(dragState.listEl.children)
     .filter(el => el.classList.contains('row') || el.classList.contains('drag-placeholder'));
   const withoutRow = ordered.filter(el => el !== dragState.rowEl);
-  const newIndex = withoutRow.indexOf(dragState.placeholderEl);
+  const newIndex = withoutRow.indexOf(dragState.placeholderEl); // 0..n-1
 
+  // Clean up visuals
   dragState.ghostEl.remove();
   dragState.rowEl.style.visibility = '';
   dragState.placeholderEl.remove();
@@ -254,8 +220,10 @@ async function onUp(e) {
   const { folderId, items, startIndex } = dragState;
   dragState = null;
 
+  // If nothing actually changed, do nothing
   if (newIndex === startIndex || newIndex < 0) return;
 
+  // Reorder and save
   const copy = items.slice();
   const [moved] = copy.splice(startIndex, 1);
   copy.splice(newIndex, 0, moved);
@@ -278,6 +246,8 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
     const ghost = makeGhost(rowEl);
     const placeholder = makePlaceholder(rowEl);
 
+    // Hide original row and insert placeholder BEFORE it,
+    // so "no movement" keeps the same index.
     rowEl.style.visibility = 'hidden';
     rowEl.before(placeholder);
 
@@ -324,6 +294,7 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
     const _cancelIfMoved = (ev) => {
       const y = (ev.touches && ev.touches[0] ? ev.touches[0].clientY : ev.clientY);
       if (Math.abs(y - dragState.startY) > MOVE_CANCEL_PX && !dragState.ghostEl) {
+        // Moved during hold → cancel long-press
         cancelHoldTimer();
         dragState = null;
         document.removeEventListener(moveEv, _cancelIfMoved, { passive:true });
@@ -343,9 +314,12 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
 
     document.addEventListener(moveEv, _cancelIfMoved, { passive:true });
     document.addEventListener(upEv, _cancelPress,    { passive:true });
+
+    // Prevent text selection
     e.preventDefault();
   };
 
+  // Touch + mouse
   handleBtn.addEventListener('touchstart', onPointerDown, { passive:false });
   handleBtn.addEventListener('mousedown',  onPointerDown);
 }
@@ -413,6 +387,7 @@ function render(data) {
   Object.entries(data).forEach(([folderId, folder]) => {
     const isCollapsed = getCollapsed(folderId);
 
+    // Header
     const header = document.createElement('div');
     header.className = 'folder' + (isCollapsed ? ' collapsed' : '');
 
@@ -435,6 +410,7 @@ function render(data) {
       title.addEventListener('click', () => toggleCollapse());
     }
 
+    // Add item / delete folder (only unlocked)
     let addItemBtn = null;
     if (!locked) {
       addItemBtn = document.createElement('button');
@@ -445,8 +421,8 @@ function render(data) {
         showAddPopover(addItemBtn, async (kind) => {
           const items = Array.isArray(folder.items) ? folder.items.slice() : [];
           if (kind === 'status')      items.push({ kind: 'status', name: '' });
-          else if (kind === 'length') items.push({ kind: 'length', name: '' });
-          else                        items.push({ kind: 'qty',    name: '', qty: 0 });
+          else if (kind === 'length') items.push({ kind: 'length', name: '' });        // lengthFt unset → shows "—"
+          else                        items.push({ kind: 'qty',    name: '', qty: 0 }); // default qty 0
           await saveItems(folderId, items);
           await init();
         });
@@ -505,23 +481,23 @@ function render(data) {
       main.className = 'row-main';
 
       if (!locked) {
+        // Delete item (left side) — now with CONFIRM dialog including item name
         const delBtn = document.createElement('button');
         delBtn.textContent = '🗑️';
         delBtn.className = 'delete-btn';
         delBtn.title = 'Delete item';
-        delBtn.addEventListener('click', async (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          showConfirmDeletePopover(delBtn, item.name || '', async () => {
-            items.splice(index, 1);
-            await saveItems(folderId, items);
-            await init();
-          });
+        delBtn.addEventListener('click', async () => {
+          const itemName = (items[index]?.name || '').trim() || 'this item';
+          const ok = confirm(`Delete “${itemName}”? This cannot be undone.`);
+          if (!ok) return;
+          items.splice(index, 1);
+          await saveItems(folderId, items);
+          await init();
         });
         main.appendChild(delBtn);
       }
 
-      // Name
+      // Name: input (unlocked) or static (locked)
       if (locked) {
         const nameText = document.createElement('span');
         nameText.className = 'name-text';
@@ -603,15 +579,20 @@ function render(data) {
           });
           main.appendChild(picker);
         }
-      } else { // length
+      } else { // kind === 'length'
         if (locked) {
           const lenText = document.createElement('span');
           lenText.className = 'len-text';
-          lenText.textContent = (typeof item.lengthFt === 'number') ? `${item.lengthFt} ft` : '—';
+          if (typeof item.lengthFt === 'number') {
+            lenText.textContent = `${item.lengthFt} ft`;
+          } else {
+            lenText.textContent = '—';
+          }
           main.appendChild(lenText);
         } else {
           const lenGroup = document.createElement('div');
           lenGroup.className = 'len-group';
+
           const lenInput = document.createElement('input');
           lenInput.type = 'number';
           lenInput.step = '0.1';
@@ -624,22 +605,24 @@ function render(data) {
             else delete items[index].lengthFt;
             await saveItems(folderId, items);
           });
+
           const unit = document.createElement('span');
           unit.className = 'unit';
           unit.textContent = 'ft';
+
           lenGroup.appendChild(lenInput);
           lenGroup.appendChild(unit);
           main.appendChild(lenGroup);
         }
       }
 
-      // Drag handle (far right)
+      // DRAG HANDLE ON FAR RIGHT
       if (!locked) {
         const handle = document.createElement('button');
         handle.className = 'drag-handle';
         handle.title = 'Hold 0.25s to reorder';
         handle.setAttribute('aria-label', 'Reorder item (press and hold)');
-        main.appendChild(handle);
+        main.appendChild(handle);              // append LAST so it's on the far right
         attachDragHandle(handle, list, row, folderId, items, index);
       }
 
@@ -659,6 +642,7 @@ addFolderBtn?.addEventListener('click', async () => {
   const clean = name.trim();
   if (!clean) return;
 
+  // Prevent duplicate names
   const all = await loadAll();
   const dup = Object.values(all).some(f => (f?.name || '').trim().toLowerCase() === clean.toLowerCase());
   if (dup) { alert('That folder name is already in use.'); return; }
@@ -688,6 +672,7 @@ toggleLockBtn?.addEventListener('click', () => {
   closePopover();
 });
 
+// Always lock on navigation away
 window.addEventListener('beforeunload', () => {
   locked = true;
   setLockUI();
