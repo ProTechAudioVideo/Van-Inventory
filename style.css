@@ -39,7 +39,6 @@ button { cursor:pointer; }
 .folder.collapsed + .folder-items { display:none; }
 
 /* ===== Row: TWO-ZONE LAYOUT ===== */
-/* configurable control-bay width */
 :root { --bay-w: 220px; }
 @media (max-width: 430px) { :root { --bay-w: 180px; } }
 
@@ -52,12 +51,8 @@ button { cursor:pointer; }
 }
 
 /* Left zone (trash + name) */
-.row-left{
-  display:flex; align-items:center; gap:8px; min-width:0;
-}
-.row-left input[type="text"]{
-  min-width:0; flex:1 1 auto; padding:6px 8px;
-}
+.row-left{ display:flex; align-items:center; gap:8px; min-width:0; }
+.row-left input[type="text"]{ min-width:0; flex:1 1 auto; padding:6px 8px; }
 .name-text{
   flex:1 1 auto; padding:6px 8px; background:#fff; border:1px solid #e5e7eb; border-radius:4px;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
@@ -70,8 +65,8 @@ button { cursor:pointer; }
   align-items:center;
   width:100%;
 }
-.locked .control-bay{ grid-template-columns: 1fr; } /* center control with no handle */
-.controls{ justify-self:center; }                   /* center controls within bay */
+.locked .control-bay{ grid-template-columns: 1fr; }
+.controls{ justify-self:center; }
 
 /* Generic inputs/buttons inside rows */
 .row button{ padding:4px 8px; }
@@ -85,14 +80,29 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
   min-width:2.35em; text-align:center; padding:6px 6px; border:1px solid #e5e7eb; border-radius:4px; background:#fff;
 }
 
-/* Length */
+/* ===== Length ===== */
 .len-group{ display:flex; align-items:center; gap:4px; }
-.len-input{ width:3.8em; text-align:center; -moz-appearance:textfield; appearance:textfield; padding:6px 6px; }
+
+/* Wider box: show up to “12345.6” comfortably */
+.len-input{
+  width:7.5ch;                  /* was ~3.8em */
+  text-align:center;
+  -moz-appearance:textfield; appearance:textfield;
+  padding:6px 6px;
+}
 .len-input::-webkit-outer-spin-button,
 .len-input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+
 .unit{ font-size:.9rem; color:#334155; }
+
+/* Locked view width to match the editable input */
 .len-text{
-  min-width:max(3.2em, 2.35em); text-align:center; padding:6px 6px; border:1px solid #e5e7eb; border-radius:4px; background:#fff;
+  min-width:7.5ch;              /* was max(3.2em, 2.35em) */
+  text-align:center;
+  padding:6px 6px;
+  border:1px solid #e5e7eb;
+  border-radius:4px;
+  background:#fff;
 }
 
 /* Status chips & picker */
@@ -148,7 +158,7 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
   .caret, .drag-handle{ width:22px; height:22px; }
   .folder-items{ margin-left:18px; }
   input[type="number"]{ width:2.35em; padding:6px 4px; }
-  .len-input{ width:3.4em; padding:6px 4px; }
+  .len-input{ width:7.5ch; padding:6px 4px; }  /* keep the longer width on small screens too */
 }
 
 /* Hide edit affordances while locked (JS also toggles display for add/download) */

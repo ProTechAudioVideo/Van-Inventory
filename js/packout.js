@@ -267,6 +267,11 @@ function render(data){
         }else{
           const minus=document.createElement('button'); minus.textContent='−'; minus.title='Decrement';
           const qty=document.createElement('input'); qty.type='number'; qty.min='0'; qty.value=item.qty||0;
+          // 🔢 Force mobile NUMERIC keypad for qty:
+          qty.setAttribute('inputmode','numeric');    // iOS/Android numeric keypad
+          qty.setAttribute('pattern','[0-9]*');       // Android fallback
+          qty.enterKeyHint = 'done';
+
           const plus=document.createElement('button'); plus.textContent='+'; plus.title='Increment';
           minus.addEventListener('click', async (e)=>{ e.preventDefault(); const v=Math.max(0,(item.qty||0)-1); items[index].qty=v; qty.value=v; await saveItems(folderId,items); });
           qty.addEventListener('change', async ()=>{ items[index].qty=Math.max(0, parseInt(qty.value||'0',10)); qty.value=items[index].qty; await saveItems(folderId,items); });
@@ -287,6 +292,10 @@ function render(data){
         }else{
           const g=document.createElement('div'); g.className='len-group';
           const inp=document.createElement('input'); inp.type='number'; inp.step='0.1'; inp.value=(typeof item.lengthFt==='number')?String(item.lengthFt):''; inp.className='len-input'; inp.placeholder='0.0';
+          // 🔢 Force mobile DECIMAL keypad for length:
+          inp.setAttribute('inputmode','decimal');
+          inp.enterKeyHint = 'done';
+
           const u=document.createElement('span'); u.className='unit'; u.textContent='ft';
           inp.addEventListener('change', async ()=>{ const v=parseFloat(inp.value); if(Number.isFinite(v)) items[index].lengthFt=v; else delete items[index].lengthFt; await saveItems(folderId,items); });
           g.append(inp,u); controls.appendChild(g);
