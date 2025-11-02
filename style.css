@@ -149,7 +149,7 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 .status-picker.low   { background:#ffedd5; border-color:#f97316; color:#7c2d12; }
 .status-picker.empty { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
 
-/* ===== Popovers (add-item + status) ===== */
+/* ===== Popovers (add-item + status + confirm delete) ===== */
 .popover {
   position:absolute;
   z-index:999;
@@ -173,18 +173,27 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 .popover-item:focus { background:#f1f5f9; }
 .popover-item.selected { background:#e2e8f0; }
 
+/* Confirm popover layout */
+.confirm-popover .confirm-title { padding:6px 8px 10px; font-size:.9rem; }
+.popover-actions { display:flex; gap:8px; justify-content:flex-end; padding:6px; }
+.btn {
+  padding:6px 10px; border-radius:6px; border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a;
+}
+.btn-secondary { }
+.btn-danger   { background:#fee2e2; border-color:#fca5a5; color:#991b1b; }
+
 /* ===== Drag handle + drag visuals ===== */
 .drag-handle {
   width:26px; height:26px;
   border:1px solid #cbd5e1; border-radius:4px; background:#fff;
   display:inline-flex; align-items:center; justify-content:center;
   position:relative;
-  margin-left:auto;            /* push handle to FAR RIGHT */
+  margin-left:auto; /* far right */
 }
 .drag-handle::before,
 .drag-handle::after {
   content:""; position:absolute; left:6px; right:6px; height:2px; background:#94a3b8;
-  box-shadow: 0 6px 0 #94a3b8, 0 -6px 0 #94a3b8; /* 3 bars total */
+  box-shadow: 0 6px 0 #94a3b8, 0 -6px 0 #94a3b8;
   top:50%; transform:translateY(-50%);
 }
 .drag-ghost {
