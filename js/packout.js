@@ -1,8 +1,8 @@
 // js/packout.js
 // Lock/Unlock view, qty|status|length items, add-item popover chooser,
-// inline folder rename, expand/collapse, status dropdown,
+// inline folder rename, expand/collapse, status dropdown (Filled/Good/Refill/Empty),
 // native confirm for item delete, and long-press (0.25s) drag-to-reorder
-// via a right-side handle (touch + mouse).
+// via a right-side handle (touch + mouse). Back-compat for old status values.
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import {
@@ -51,14 +51,28 @@ function setLockUI() {
     toggleLockBtn.setAttribute('aria-pressed', (!locked).toString());
     toggleLockBtn.setAttribute('aria-label', locked ? 'Unlock editing' : 'Lock view');
   }
-  // HIDE these while locked
+  // Hide while locked
   if (addFolderBtn)  addFolderBtn.style.display  = locked ? 'none' : '';
   if (downloadBtn)   downloadBtn.style.display   = locked ? 'none' : '';
 }
 
-// Helpers
-const STATUS_ORDER = ['empty', 'low', 'mid', 'full'];
-const STATUS_LABEL = { empty: 'Empty', low: 'Low', mid: 'Mid', full: 'Full' };
+// ===== Status config (new names + colors) =====
+// Canonical keys: filled (Blue), good (Green), refill (Yellow), empty (Red)
+const STATUS_KEYS = ['empty', 'refill', 'good', 'filled']; // order in picker
+const STATUS_LABEL = {
+  filled: 'Filled',
+  good:   'Good',
+  refill: 'Refill',
+  empty:  'Empty',
+};
+// Backward-compat for older data
+const LEGACY_STATUS_MAP = { full: 'filled', mid: 'good', low: 'refill', empty: 'empty' };
+function canonicalStatus(s) {
+  if (!s) return null;
+  if (STATUS_KEYS.includes(s)) return s;
+  if (s in LEGACY_STATUS_MAP) return LEGACY_STATUS_MAP[s];
+  return null;
+}
 
 const slugify = (s) => (s || '')
   .toLowerCase().trim()
@@ -126,10 +140,10 @@ function showStatusPopover(anchorEl, current, onSelect) {
   pop.role = 'listbox';
   pop.innerHTML = `
     <button class="popover-item" data-value="none">— None</button>
-    <button class="popover-item" data-value="empty">Empty</button>
-    <button class="popover-item" data-value="low">Low</button>
-    <button class="popover-item" data-value="mid">Mid</button>
-    <button class="popover-item" data-value="full">Full</button>
+    <button class="popover-item" data-value="empty">${STATUS_LABEL.empty}</button>
+    <button class="popover-item" data-value="refill">${STATUS_LABEL.refill}</button>
+    <button class="popover-item" data-value="good">${STATUS_LABEL.good}</button>
+    <button class="popover-item" data-value="filled">${STATUS_LABEL.filled}</button>
   `;
   pop.querySelectorAll('.popover-item').forEach(btn => {
     const v = btn.dataset.value;
@@ -204,7 +218,7 @@ function onMove(e) {
   }
 }
 
-// --- FIX: no accidental shift when releasing without moving
+// --- No accidental shift when releasing without moving
 async function onUp(e) {
   if (!dragState) return;
   e.preventDefault();
@@ -213,7 +227,7 @@ async function onUp(e) {
   const ordered = Array.from(dragState.listEl.children)
     .filter(el => el.classList.contains('row') || el.classList.contains('drag-placeholder'));
   const withoutRow = ordered.filter(el => el !== dragState.rowEl);
-  const newIndex = withoutRow.indexOf(dragState.placeholderEl); // 0..n-1
+  const newIndex = withoutRow.indexOf(dragState.placeholderEl);
 
   // Clean up visuals
   dragState.ghostEl.remove();
@@ -226,7 +240,6 @@ async function onUp(e) {
   // If nothing actually changed, do nothing
   if (newIndex === startIndex || newIndex < 0) return;
 
-  // Reorder and save
   const copy = items.slice();
   const [moved] = copy.splice(startIndex, 1);
   copy.splice(newIndex, 0, moved);
@@ -297,7 +310,6 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
     const _cancelIfMoved = (ev) => {
       const y = (ev.touches && ev.touches[0] ? ev.touches[0].clientY : ev.clientY);
       if (Math.abs(y - dragState.startY) > MOVE_CANCEL_PX && !dragState.ghostEl) {
-        // Moved during hold → cancel long-press
         cancelHoldTimer();
         dragState = null;
         document.removeEventListener(moveEv, _cancelIfMoved, { passive:true });
@@ -318,11 +330,9 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
     document.addEventListener(moveEv, _cancelIfMoved, { passive:true });
     document.addEventListener(upEv, _cancelPress,    { passive:true });
 
-    // Prevent text selection
     e.preventDefault();
   };
 
-  // Touch + mouse
   handleBtn.addEventListener('touchstart', onPointerDown, { passive:false });
   handleBtn.addEventListener('mousedown',  onPointerDown);
 }
@@ -424,8 +434,8 @@ function render(data) {
         showAddPopover(addItemBtn, async (kind) => {
           const items = Array.isArray(folder.items) ? folder.items.slice() : [];
           if (kind === 'status')      items.push({ kind: 'status', name: '' });
-          else if (kind === 'length') items.push({ kind: 'length', name: '' });        // lengthFt unset → shows "—"
-          else                        items.push({ kind: 'qty',    name: '', qty: 0 }); // default qty 0
+          else if (kind === 'length') items.push({ kind: 'length', name: '' });
+          else                        items.push({ kind: 'qty',    name: '', qty: 0 });
           await saveItems(folderId, items);
           await init();
         });
@@ -467,15 +477,17 @@ function render(data) {
     const items = Array.isArray(folder.items) ? folder.items.slice() : [];
 
     const normalizeKind = (item) => {
-      if (item.kind === 'qty' || item.kind === 'status' || item.kind === 'length') return item.kind;
-      if (STATUS_ORDER.includes(item.status)) return 'status';
-      if (typeof item.lengthFt === 'number')  return 'length';
+      // Treat any known (new or legacy) status key as 'status'
+      if (canonicalStatus(item.status)) return 'status';
+      if (typeof item.lengthFt === 'number') return 'length';
+      if (item.kind === 'length') return 'length';
+      if (item.kind === 'status') return 'status';
       return 'qty';
     };
 
     const pushRow = (item, index) => {
       const kind = normalizeKind(item);
-      const statusActive = STATUS_ORDER.includes(item.status) ? item.status : null;
+      const statusActive = canonicalStatus(item.status);
 
       const row = document.createElement('div');
       row.className = 'row';
@@ -484,7 +496,7 @@ function render(data) {
       main.className = 'row-main';
 
       if (!locked) {
-        // Delete item (left side) — native confirm with name
+        // Delete item with native confirm (includes name)
         const delBtn = document.createElement('button');
         delBtn.textContent = '🗑️';
         delBtn.className = 'delete-btn';
@@ -500,7 +512,7 @@ function render(data) {
         main.appendChild(delBtn);
       }
 
-      // Name: input (unlocked) or static (locked)
+      // Name (locked vs unlocked)
       if (locked) {
         const nameText = document.createElement('span');
         nameText.className = 'name-text';
@@ -582,7 +594,7 @@ function render(data) {
           });
           main.appendChild(picker);
         }
-      } else { // kind === 'length'
+      } else { // length
         if (locked) {
           const lenText = document.createElement('span');
           lenText.className = 'len-text';
@@ -625,7 +637,7 @@ function render(data) {
         handle.className = 'drag-handle';
         handle.title = 'Hold 0.25s to reorder';
         handle.setAttribute('aria-label', 'Reorder item (press and hold)');
-        main.appendChild(handle);              // append LAST so it's on the far right
+        main.appendChild(handle);
         attachDragHandle(handle, list, row, folderId, items, index);
       }
 
