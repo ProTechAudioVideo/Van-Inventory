@@ -1,14 +1,22 @@
 // /js/packout.js
 
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
-import { getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import {
+  getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc
+} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-/* Replace with your actual project config (safe for client-side) */
+/* ──────────────────────────────────────────────────────────────────
+   Firebase config (PROJECT: protech-van-inventory-2025)
+   (Web config is not a secret; rules protect your data.)
+   ────────────────────────────────────────────────────────────────── */
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDRMRiSsu0icqeWuxqaWXs-Ps2-3jS_DOg",
+  authDomain: "protech-van-inventory-2025.firebaseapp.com",
+  projectId: "protech-van-inventory-2025",
+  storageBucket: "protech-van-inventory-2025.firebasestorage.app",
+  messagingSenderId: "86651643634",
+  appId: "1:86651643634:web:6891641e14e8214a34526b",
+  measurementId: "G-Z7XRSJ486Q"
 };
 
 const app = initializeApp(firebaseConfig);
