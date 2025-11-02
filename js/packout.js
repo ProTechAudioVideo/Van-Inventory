@@ -427,15 +427,15 @@ function render(data) {
     let addItemBtn = null;
     if (!locked) {
       addItemBtn = document.createElement('button');
-      addItemBtn.textContent = '+';
+      addItemBtn.textContent = '+ Add Item';             // <<< changed from '+' to '+ Add Item'
       addItemBtn.title = 'Add item';
       addItemBtn.addEventListener('click', async (e) => {
         e.stopPropagation();
         showAddPopover(addItemBtn, async (kind) => {
           const items = Array.isArray(folder.items) ? folder.items.slice() : [];
           if (kind === 'status')      items.push({ kind: 'status', name: '' });
-          else if (kind === 'length') items.push({ kind: 'length', name: '' });
-          else                        items.push({ kind: 'qty',    name: '', qty: 0 });
+          else if (kind === 'length') items.push({ kind: 'length', name: '' });        // lengthFt unset → shows "—"
+          else                        items.push({ kind: 'qty',    name: '', qty: 0 }); // default qty 0
           await saveItems(folderId, items);
           await init();
         });
@@ -600,7 +600,7 @@ function render(data) {
           lenText.className = 'len-text';
           if (typeof item.lengthFt === 'number') {
             lenText.textContent = `${item.lengthFt} ft`;
-          } else {
+            } else {
             lenText.textContent = '—';
           }
           main.appendChild(lenText);
