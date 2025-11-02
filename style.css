@@ -38,14 +38,14 @@ button { cursor:pointer; }
 .folder-items { margin:8px 0 16px 34px; }
 .folder.collapsed + .folder-items { display:none; }
 
-/* ===== Row: TWO-ZONE LAYOUT ===== */
-/* Smaller control bay so the name field can be longer */
-:root { --bay-w: 200px; }
-@media (max-width: 430px) { :root { --bay-w: 160px; } }
+/* ===== Row: TWO-ZONE LAYOUT (name wide, controls fixed & centered) ===== */
+/* Make the right column (control bay) intentionally smaller so the name input is wider */
+:root { --bay-w: 200px; }                   /* desktop/tablet */
+@media (max-width: 430px) { :root { --bay-w: 160px; } }  /* iPhone portrait */
 
 .row {
   display:grid;
-  grid-template-columns: 1fr var(--bay-w); /* left grows, right fixed (smaller) */
+  grid-template-columns: 1fr var(--bay-w);  /* LEFT grows, RIGHT is fixed (smaller) */
   gap:8px;
   align-items:center;
   margin:8px 0;
@@ -70,12 +70,13 @@ button { cursor:pointer; }
   align-items:center;
   width:100%;
 }
-/* Right-align the controls within the bay so they sit closer to the handle */
-.controls{ justify-self:end; margin-right:4px; }
+/* Center the control group within the bay (original behavior) */
+.controls{ justify-self:center; }
 
+/* Locked: no handle; keep the single control centered */
 .locked .control-bay{
-  grid-template-columns: auto;       /* no handle in locked view */
-  justify-items: end;                 /* keep the single control right-aligned */
+  grid-template-columns: 1fr;
+  justify-items: center;
 }
 
 /* Generic inputs/buttons inside rows */
