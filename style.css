@@ -17,19 +17,33 @@ button { cursor:pointer; }
 #add-folder, #download-json, #toggle-lock { padding:6px 10px; }
 #toggle-lock { border:1px solid #94a3b8; background:#f1f5f9; border-radius:6px; }
 
-/* ===== Folder header (caret) ===== */
-.folder { display:flex; align-items:center; gap:8px; margin-top:14px; font-weight:600; }
-.folder-title { flex:1; user-select:none; }
-.folder-title.editable { cursor:text; border-bottom:1px dashed transparent; }
-.folder-title.editable:hover { border-bottom-color:#cbd5e1; }
-.folder-title-input {
-  font: inherit; font-weight:600; padding:4px 6px; border:1px solid #cbd5e1; border-radius:4px; min-width:8ch;
+/* ===== Shared sizing ===== */
+:root { --bay-w: 220px; }                 /* desktop/tablet */
+@media (max-width: 430px) { :root { --bay-w: 180px; } } /* iPhone portrait */
+
+/* ===== Folder header (aligned to row columns) ===== */
+.folder {
+  display:grid;
+  grid-template-columns: 26px 1fr var(--bay-w); /* caret | title | actions (same right column as rows) */
+  align-items:center;
+  gap:8px;
+  margin-top:14px;
+  font-weight:600;
 }
 .caret {
   width:26px; height:26px; border:1px solid #cbd5e1; border-radius:4px; background:#fff;
   display:inline-flex; align-items:center; justify-content:center; line-height:1; font-size:16px;
 }
 .caret:focus { outline:2px solid #0ea5e9; outline-offset:2px; }
+.folder-title { user-select:none; min-width:0; }  /* allow ellipsis */
+.folder-title.editable { cursor:text; border-bottom:1px dashed transparent; }
+.folder-title.editable:hover { border-bottom-color:#cbd5e1; }
+.folder-title-input {
+  font: inherit; font-weight:600; padding:4px 6px; border:1px solid #cbd5e1; border-radius:4px; min-width:8ch;
+}
+.folder-actions{
+  display:flex; justify-content:flex-end; align-items:center; gap:8px; width:100%;
+}
 .delete-btn {
   background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; border-radius:4px; padding:4px 6px; font-size:.9rem;
 }
@@ -38,11 +52,10 @@ button { cursor:pointer; }
 .folder-items { margin:8px 0 16px 34px; }
 .folder.collapsed + .folder-items { display:none; }
 
-/* ===== Row: TWO-ZONE LAYOUT (name wide, controls shrink to fit) ===== */
-/* The key change: right column = auto (content width), left fills the rest */
+/* ===== Row: TWO-ZONE LAYOUT (left grows, right fixed) ===== */
 .row {
   display:grid;
-  grid-template-columns: minmax(0, 1fr) auto; /* LEFT grows (~75%+), RIGHT only as wide as its content */
+  grid-template-columns: minmax(0, 1fr) var(--bay-w); /* LEFT grows, RIGHT fixed to align with header */
   gap:8px;
   align-items:center;
   margin:8px 0;
@@ -50,7 +63,7 @@ button { cursor:pointer; }
 
 /* Left zone (trash + name) */
 .row-left{
-  display:flex; align-items:center; gap:8px; min-width:0; /* allow the input to shrink instead of forcing scroll */
+  display:flex; align-items:center; gap:8px; min-width:0;
 }
 .row-left input[type="text"]{
   min-width:0; flex:1 1 auto; padding:6px 8px;
@@ -61,19 +74,17 @@ button { cursor:pointer; }
 }
 
 /* Right zone (control bay) */
-/* Let the bay size to its content (no fixed width); keep handle on the far right of the bay */
 .control-bay{
   display:grid;
-  grid-template-columns: auto auto;   /* [controls] [handle] */
+  grid-template-columns: 1fr auto;   /* controls | handle */
   align-items:center;
-  /* no width:100% on purpose — we want it to shrink-wrap its content */
+  width:100%;
 }
-/* Center the control group inside the bay (visually neat even as the bay shrinks) */
-.controls{ justify-self:center; }
+.controls{ justify-self:center; }     /* center the controls inside the fixed bay */
 
 /* Locked: no handle; keep the single control centered */
 .locked .control-bay{
-  grid-template-columns: auto;
+  grid-template-columns: 1fr;
   justify-items: center;
 }
 
