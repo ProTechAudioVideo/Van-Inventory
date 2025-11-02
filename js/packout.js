@@ -1,24 +1,20 @@
 // /js/packout.js
-// Full file with: lock/unlock (defaults locked), "+ Add Item" popover (qty/status/length),
-// rename folders, confirm delete item, right-side drag handle (0.25s hold),
-// status labels Filled/Good/Refill/Empty, numeric keypad hints, and length classes len-input/len-text.
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import { getFirestore, collection, doc, getDocs, setDoc, updateDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-firestore.js';
 
-/* Use your actual config */
+/* Replace with your actual project config (safe for client-side) */
 const firebaseConfig = {
-  apiKey: "AIzaSyDRMRiSsu0icqeWuxqaWXs-Ps2-3jS_DOg",
-  authDomain: "protech-van-inventory-2025.firebaseapp.com",
-  projectId: "protech-van-inventory-2025",
-  storageBucket: "protech-van-inventory-2025.appspot.com",
-  appId: "1:818777808639:web:demo"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT",
+  appId: "YOUR_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
 
-// DOM refs
+/* --- DOM --- */
 const addFolderBtn  = document.getElementById('add-folder');
 const downloadBtn   = document.getElementById('download-json');
 const toggleLockBtn = document.getElementById('toggle-lock');
@@ -27,12 +23,12 @@ const container =
   document.getElementById('page-container') ||
   document.body; // fallback
 
-// Collection key per page
+/* Page key -> Firestore collection */
 const pageKey = (document.body?.dataset?.packout) ||
   (document.title || 'packout').toLowerCase().replace(/\s+/g,'-');
 const colRef = collection(db, pageKey);
 
-// Collapse & lock state
+/* Collapse + lock state */
 const collapseKey   = (id) => `packout:${pageKey}:collapsed:${id}`;
 const getCollapsed  = (id) => localStorage.getItem(collapseKey(id)) === '1';
 const setCollapsed  = (id, val) => { if (val) localStorage.setItem(collapseKey(id),'1'); else localStorage.removeItem(collapseKey(id)); };
@@ -49,19 +45,21 @@ function setLockUI(){
   if (downloadBtn)  downloadBtn.style.display  = locked ? 'none' : '';
 }
 
+/* Status labels */
 const STATUS_LABEL = { filled:'Filled', good:'Good', refill:'Refill', empty:'Empty' };
 const LEGACY_STATUS_MAP = { full:'filled', mid:'good', low:'refill', empty:'empty' };
 const canonicalStatus = (s)=> s ? (STATUS_LABEL[s] ? s : LEGACY_STATUS_MAP[s] || null) : null;
 
+/* ID helpers */
 const slugify = (s)=>(s||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') || ('folder-'+Date.now());
 
-// Firestore I/O
+/* Firestore I/O */
 async function loadAll(){ const out={}; (await getDocs(colRef)).forEach(d=>out[d.id]=d.data()); return out; }
 async function ensureFolder(id,data){ await setDoc(doc(colRef,id),data,{merge:true}); }
 async function saveItems(folderId,items){ await updateDoc(doc(colRef,folderId),{items}); }
 async function deleteFolder(folderId){ await deleteDoc(doc(colRef,folderId)); }
 
-// Popovers
+/* Popovers */
 let openPopover=null;
 function attachPopover(pop,anchor,onDocClick){
   document.body.appendChild(pop);
@@ -108,7 +106,7 @@ function showStatusPopover(anchor,current,onSelect){
   attachPopover(pop,anchor,onDocClick);
 }
 
-// Drag to reorder (0.25s hold)
+/* Drag to reorder (0.25s hold) */
 const DRAG_HOLD_MS=250, MOVE_CANCEL_PX=6;
 let dragState=null;
 function makeGhost(row){ const r=row.getBoundingClientRect(); const g=row.cloneNode(true); g.classList.add('drag-ghost'); g.style.width=`${r.width}px`; g.style.height=`${r.height}px`; g.style.left=`${r.left+window.scrollX}px`; g.style.top=`${r.top+window.scrollY}px`; document.body.appendChild(g); return g; }
@@ -160,7 +158,7 @@ function attachDragHandle(handle,listEl,row,folderId,items,index){
   handle.addEventListener('mousedown',  onDown);
 }
 
-// Inline rename
+/* Inline rename */
 function startRenameFolder(folderId, folderData, titleSpan){
   if(locked) return;
   const input=document.createElement('input'); input.type='text'; input.className='folder-title-input'; input.value=folderData.name||''; input.setAttribute('aria-label','Edit folder name');
@@ -181,13 +179,13 @@ function startRenameFolder(folderId, folderData, titleSpan){
   input.addEventListener('blur',commit);
 }
 
-// Render
+/* Render everything */
 function render(data){
   setLockUI(); container.innerHTML='';
   Object.entries(data).forEach(([folderId, folder])=>{
     const isCollapsed=getCollapsed(folderId);
 
-    // Header
+    /* Header */
     const header=document.createElement('div'); header.className='folder'+(isCollapsed?' collapsed':'');
     const caret=document.createElement('button'); caret.className='caret'; caret.textContent=isCollapsed?'▸':'▾'; header.appendChild(caret);
     const title=document.createElement('span'); title.className='folder-title'+(!locked?' editable':''); title.textContent=folder.name||'(untitled)'; header.appendChild(title);
@@ -197,7 +195,6 @@ function render(data){
       const actions=document.createElement('div'); actions.className='folder-actions';
 
       const addItemBtn=document.createElement('button'); addItemBtn.textContent='+ Add Item'; addItemBtn.title='Add item';
-      addItemBtn.id = `add-item-${folderId}`;
       addItemBtn.addEventListener('click', async (e)=>{
         e.stopPropagation();
         showAddPopover(addItemBtn, async(kind)=>{
@@ -229,6 +226,7 @@ function render(data){
     caret.addEventListener('click',toggleCollapse);
 
     const items=Array.isArray(folder.items)?folder.items.slice():[];
+
     const normalizeKind=(it)=>{
       if(canonicalStatus(it.status)) return 'status';
       if(typeof it.lengthFt==='number' || it.kind==='length') return 'length';
@@ -240,7 +238,7 @@ function render(data){
       const kind=normalizeKind(item), statusActive=canonicalStatus(item.status);
       const row=document.createElement('div'); row.className='row';
 
-      // Left side
+      /* Left side */
       const left=document.createElement('div'); left.className='row-left';
       if(!locked){
         const del=document.createElement('button'); del.textContent='🗑️'; del.className='delete-btn item'; del.title='Delete item';
@@ -260,7 +258,7 @@ function render(data){
         left.appendChild(inp);
       }
 
-      // Right side
+      /* Right side */
       const bay=document.createElement('div'); bay.className='control-bay';
       const controls=document.createElement('div'); controls.className='controls';
 
@@ -281,21 +279,25 @@ function render(data){
         if(locked){
           const chip=document.createElement('span'); chip.className=`status-chip ${statusActive||'none'}`; chip.textContent=statusActive?STATUS_LABEL[statusActive]:'—'; controls.appendChild(chip);
         }else{
-          const picker=document.createElement('button'); picker.className=`status-picker ${statusActive||'none'}`; picker.textContent=statusActive?STATUS_LABEL[statusActive]:'Filled'; // default label
+          const picker=document.createElement('button'); picker.className=`status-picker ${statusActive||'none'}`; picker.textContent=statusActive?STATUS_LABEL[statusActive]:'Filled';
           picker.addEventListener('click',(e)=>{ e.preventDefault(); showStatusPopover(picker, statusActive, async (v)=>{ if(v) items[index].status=v; else delete items[index].status; await saveItems(folderId,items); await init(); }); });
           controls.appendChild(picker);
         }
       } else { // length
         if(locked){
-          const t=document.createElement('span'); t.className='len-text';  // <<— ensures locked width matches
-          t.textContent=(typeof item.lengthFt==='number')?`${item.lengthFt} ft`:'—';
-          controls.appendChild(t);
+          const span=document.createElement('span');
+          span.className='len-value';             // fixed width in locked mode
+          span.textContent=(typeof item.lengthFt==='number')?`${item.lengthFt} ft`:'—';
+          controls.appendChild(span);
         }else{
           const g=document.createElement('div'); g.className='len-group';
-          const inp=document.createElement('input'); inp.type='number'; inp.step='0.1'; inp.value=(typeof item.lengthFt==='number')?String(item.lengthFt):''; 
-          inp.classList.add('len-input');                           // <<— ensures editable width is wide
+          const inp=document.createElement('input');
+          inp.type='number'; inp.step='0.1';
           inp.placeholder='0.0';
-          inp.setAttribute('inputmode','decimal'); inp.enterKeyHint='done';
+          inp.value=(typeof item.lengthFt==='number')?String(item.lengthFt):'';
+          inp.classList.add('len-input');         // fixed width in edit mode
+          inp.setAttribute('inputmode','decimal');
+          inp.enterKeyHint='done';
           const u=document.createElement('span'); u.className='unit'; u.textContent='ft';
           inp.addEventListener('change', async ()=>{ const v=parseFloat(inp.value); if(Number.isFinite(v)) items[index].lengthFt=v; else delete items[index].lengthFt; await saveItems(folderId,items); });
           g.append(inp,u); controls.appendChild(g);
@@ -304,10 +306,9 @@ function render(data){
 
       bay.appendChild(controls);
 
-      // Drag handle (right side)
+      /* Drag handle (right) */
       const handle=document.createElement('button'); handle.className='drag-handle'; handle.title='Hold 0.25s to reorder';
-      if(!locked){ attachDragHandle(handle, list, row, folderId, items, index); }
-      else { handle.style.display='none'; }
+      if(!locked){ attachDragHandle(handle, list, row, folderId, items, index); } else { handle.style.display='none'; }
       bay.appendChild(handle);
 
       row.append(left, bay);
@@ -318,7 +319,7 @@ function render(data){
   });
 }
 
-// Controls
+/* Top controls */
 addFolderBtn?.addEventListener('click', async ()=>{
   if(locked) return;
   const name=prompt('Folder name?'); if(!name) return;
@@ -336,7 +337,7 @@ downloadBtn?.addEventListener('click', async ()=>{
 toggleLockBtn?.addEventListener('click', ()=>{ locked=!locked; setLockUI(); init(); closePopover(); });
 window.addEventListener('beforeunload', ()=>{ locked=true; setLockUI(); closePopover(); });
 
-// Boot
+/* Boot */
 async function init(){
   try{ const data=await loadAll(); render(data); }
   catch(e){ console.error(e); container.innerHTML='<p style="color:#900">Could not load data. Check Firebase config/rules.</p>'; }
