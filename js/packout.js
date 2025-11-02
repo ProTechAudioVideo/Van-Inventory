@@ -1,7 +1,7 @@
 // js/packout.js
 // Lock/Unlock view, qty|status|length items, add-item popover chooser,
 // inline folder rename, expand/collapse, status dropdown,
-// and long-press (0.25s) drag-to-reorder via a handle (touch + mouse).
+// and long-press (0.25s) drag-to-reorder via a right-side handle (touch + mouse).
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import {
@@ -182,8 +182,9 @@ function onMove(e) {
   const y = docY(e) - dragState.offsetY;
   dragState.ghostEl.style.top = `${y}px`;
 
+  // Find insertion point
   const rows = Array.from(dragState.listEl.querySelectorAll(':scope > .row'))
-    .filter(el => el !== dragState.rowEl);
+    .filter(el => el !== dragState.rowEl); // original row hidden
   let insertBefore = null;
   const midY = y + dragState.ghostEl.offsetHeight / 2;
 
@@ -200,13 +201,18 @@ function onMove(e) {
   }
 }
 
+// --- FIXED: no accidental shift when releasing without moving
 async function onUp(e) {
   if (!dragState) return;
   e.preventDefault();
 
-  const children = Array.from(dragState.listEl.querySelectorAll(':scope > .row, :scope > .drag-placeholder'));
-  const phIndex = children.indexOf(dragState.placeholderEl);
+  // Determine new index among siblings, ignoring the hidden original row
+  const ordered = Array.from(dragState.listEl.children)
+    .filter(el => el.classList.contains('row') || el.classList.contains('drag-placeholder'));
+  const withoutRow = ordered.filter(el => el !== dragState.rowEl);
+  const newIndex = withoutRow.indexOf(dragState.placeholderEl); // 0..n-1
 
+  // Clean up visuals
   dragState.ghostEl.remove();
   dragState.rowEl.style.visibility = '';
   dragState.placeholderEl.remove();
@@ -214,13 +220,12 @@ async function onUp(e) {
   const { folderId, items, startIndex } = dragState;
   dragState = null;
 
-  if (phIndex < 0) return;
+  // If nothing actually changed, do nothing
+  if (newIndex === startIndex || newIndex < 0) return;
 
-  const newIndex = phIndex;
-
-  const moved = items[startIndex];
+  // Reorder and save
   const copy = items.slice();
-  copy.splice(startIndex, 1);
+  const [moved] = copy.splice(startIndex, 1);
   copy.splice(newIndex, 0, moved);
 
   await saveItems(folderId, copy);
@@ -240,26 +245,32 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
   const beginDrag = () => {
     const ghost = makeGhost(rowEl);
     const placeholder = makePlaceholder(rowEl);
+
+    // Hide original row and insert placeholder BEFORE it,
+    // so "no movement" keeps the same index.
     rowEl.style.visibility = 'hidden';
-    rowEl.after(placeholder);
+    rowEl.before(placeholder);
 
     const r = rowEl.getBoundingClientRect();
     dragState.ghostEl = ghost;
     dragState.placeholderEl = placeholder;
     dragState.offsetY = (startClientY + window.scrollY) - (r.top + window.scrollY);
 
-    const moveEv = ('ontouchstart' in window) ? 'touchmove' : 'mousemove';
-    const upEv   = ('ontouchstart' in window) ? 'touchend'  : 'mouseup';
+    const moveEv   = ('ontouchstart' in window) ? 'touchmove'   : 'mousemove';
+    const upEv     = ('ontouchstart' in window) ? 'touchend'    : 'mouseup';
+    const cancelEv = ('ontouchstart' in window) ? 'touchcancel' : null;
 
     const _onMove = (e) => onMove(e);
     const _onUp   = async (e) => {
       document.removeEventListener(moveEv, _onMove, { passive:false });
       document.removeEventListener(upEv, _onUp, { passive:false });
+      if (cancelEv) document.removeEventListener(cancelEv, _onUp, { passive:false });
       await onUp(e);
     };
 
     document.addEventListener(moveEv, _onMove, { passive:false });
-    document.addEventListener(upEv, _onUp, { passive:false });
+    document.addEventListener(upEv, _onUp,   { passive:false });
+    if (cancelEv) document.addEventListener(cancelEv, _onUp, { passive:false });
   };
 
   const onPointerDown = (e) => {
@@ -283,6 +294,7 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
     const _cancelIfMoved = (ev) => {
       const y = (ev.touches && ev.touches[0] ? ev.touches[0].clientY : ev.clientY);
       if (Math.abs(y - dragState.startY) > MOVE_CANCEL_PX && !dragState.ghostEl) {
+        // Moved during hold → cancel long-press
         cancelHoldTimer();
         dragState = null;
         document.removeEventListener(moveEv, _cancelIfMoved, { passive:true });
@@ -301,11 +313,13 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
     };
 
     document.addEventListener(moveEv, _cancelIfMoved, { passive:true });
-    document.addEventListener(upEv, _cancelPress, { passive:true });
+    document.addEventListener(upEv, _cancelPress,    { passive:true });
 
+    // Prevent text selection
     e.preventDefault();
   };
 
+  // Touch + mouse
   handleBtn.addEventListener('touchstart', onPointerDown, { passive:false });
   handleBtn.addEventListener('mousedown',  onPointerDown);
 }
@@ -329,7 +343,7 @@ function startRenameFolder(folderId, folderData, titleSpan) {
   const commit = async () => {
     const newName = (input.value || '').trim();
     const oldName = (folderData.name || '').trim();
-    if (!newName) { cleanup; return; }
+    if (!newName) { cleanup(); return; }
     if (newName === oldName) { cleanup(); return; }
 
     const all = await loadAll();
@@ -599,7 +613,7 @@ function render(data) {
         }
       }
 
-      // DRAG HANDLE ON FAR RIGHT (replaces old Type button spot)
+      // DRAG HANDLE ON FAR RIGHT
       if (!locked) {
         const handle = document.createElement('button');
         handle.className = 'drag-handle';
@@ -625,6 +639,7 @@ addFolderBtn?.addEventListener('click', async () => {
   const clean = name.trim();
   if (!clean) return;
 
+  // Prevent duplicate names
   const all = await loadAll();
   const dup = Object.values(all).some(f => (f?.name || '').trim().toLowerCase() === clean.toLowerCase());
   if (dup) { alert('That folder name is already in use.'); return; }
@@ -654,6 +669,7 @@ toggleLockBtn?.addEventListener('click', () => {
   closePopover();
 });
 
+// Always lock on navigation away
 window.addEventListener('beforeunload', () => {
   locked = true;
   setLockUI();
