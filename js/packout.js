@@ -1,7 +1,8 @@
 // js/packout.js
 // Lock/Unlock view, qty|status|length items, add-item popover chooser,
 // inline folder rename, expand/collapse, status dropdown,
-// and long-press (0.25s) drag-to-reorder via a right-side handle (touch + mouse).
+// native confirm for item delete, and long-press (0.25s) drag-to-reorder
+// via a right-side handle (touch + mouse).
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import {
@@ -50,7 +51,9 @@ function setLockUI() {
     toggleLockBtn.setAttribute('aria-pressed', (!locked).toString());
     toggleLockBtn.setAttribute('aria-label', locked ? 'Unlock editing' : 'Lock view');
   }
-  if (addFolderBtn) addFolderBtn.style.display = locked ? 'none' : '';
+  // HIDE these while locked
+  if (addFolderBtn)  addFolderBtn.style.display  = locked ? 'none' : '';
+  if (downloadBtn)   downloadBtn.style.display   = locked ? 'none' : '';
 }
 
 // Helpers
@@ -481,7 +484,7 @@ function render(data) {
       main.className = 'row-main';
 
       if (!locked) {
-        // Delete item (left side) — now with CONFIRM dialog including item name
+        // Delete item (left side) — native confirm with name
         const delBtn = document.createElement('button');
         delBtn.textContent = '🗑️';
         delBtn.className = 'delete-btn';
