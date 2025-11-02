@@ -38,14 +38,11 @@ button { cursor:pointer; }
 .folder-items { margin:8px 0 16px 34px; }
 .folder.collapsed + .folder-items { display:none; }
 
-/* ===== Row: TWO-ZONE LAYOUT (name wide, controls fixed & centered) ===== */
-/* Make the right column (control bay) intentionally smaller so the name input is wider */
-:root { --bay-w: 200px; }                   /* desktop/tablet */
-@media (max-width: 430px) { :root { --bay-w: 160px; } }  /* iPhone portrait */
-
+/* ===== Row: TWO-ZONE LAYOUT (name wide, controls shrink to fit) ===== */
+/* The key change: right column = auto (content width), left fills the rest */
 .row {
   display:grid;
-  grid-template-columns: 1fr var(--bay-w);  /* LEFT grows, RIGHT is fixed (smaller) */
+  grid-template-columns: minmax(0, 1fr) auto; /* LEFT grows (~75%+), RIGHT only as wide as its content */
   gap:8px;
   align-items:center;
   margin:8px 0;
@@ -53,7 +50,7 @@ button { cursor:pointer; }
 
 /* Left zone (trash + name) */
 .row-left{
-  display:flex; align-items:center; gap:8px; min-width:0;
+  display:flex; align-items:center; gap:8px; min-width:0; /* allow the input to shrink instead of forcing scroll */
 }
 .row-left input[type="text"]{
   min-width:0; flex:1 1 auto; padding:6px 8px;
@@ -64,18 +61,19 @@ button { cursor:pointer; }
 }
 
 /* Right zone (control bay) */
+/* Let the bay size to its content (no fixed width); keep handle on the far right of the bay */
 .control-bay{
   display:grid;
-  grid-template-columns: 1fr auto;   /* controls | handle */
+  grid-template-columns: auto auto;   /* [controls] [handle] */
   align-items:center;
-  width:100%;
+  /* no width:100% on purpose — we want it to shrink-wrap its content */
 }
-/* Center the control group within the bay (original behavior) */
+/* Center the control group inside the bay (visually neat even as the bay shrinks) */
 .controls{ justify-self:center; }
 
 /* Locked: no handle; keep the single control centered */
 .locked .control-bay{
-  grid-template-columns: 1fr;
+  grid-template-columns: auto;
   justify-items: center;
 }
 
