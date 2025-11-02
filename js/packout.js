@@ -342,4 +342,5 @@ async function init(){
   try{ const data=await loadAll(); render(data); }
   catch(e){ console.error(e); container.innerHTML='<p style="color:#900">Could not load data. Check Firebase config/rules.</p>'; }
 }
-setLockUI(); init();
+setLockUI(); 
+init();
