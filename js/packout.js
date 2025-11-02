@@ -1,7 +1,7 @@
 // js/packout.js
 // Lock/Unlock view, qty|status|length items, add-item popover chooser,
 // inline folder rename, expand/collapse, status dropdown,
-// and long-press (2s) drag-to-reorder via a handle (touch + mouse).
+// and long-press (0.25s) drag-to-reorder via a handle (touch + mouse).
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.3/firebase-app.js';
 import {
@@ -128,7 +128,6 @@ function showStatusPopover(anchorEl, current, onSelect) {
     <button class="popover-item" data-value="mid">Mid</button>
     <button class="popover-item" data-value="full">Full</button>
   `;
-  // Mark current
   pop.querySelectorAll('.popover-item').forEach(btn => {
     const v = btn.dataset.value;
     btn.classList.toggle('selected', v === current || (v === 'none' && !current));
@@ -146,7 +145,7 @@ function showStatusPopover(anchorEl, current, onSelect) {
 }
 
 // ===== Long-press drag-to-reorder (touch + mouse) =====
-const DRAG_HOLD_MS = 2000;    // 2 seconds
+const DRAG_HOLD_MS = 250;     // 0.25 seconds
 const MOVE_CANCEL_PX = 6;     // cancel long-press if finger moves too much
 
 let dragState = null; // { folderId, items, listEl, rowEl, ghostEl, placeholderEl, startIndex, startY, offsetY, holdTimer }
@@ -183,9 +182,8 @@ function onMove(e) {
   const y = docY(e) - dragState.offsetY;
   dragState.ghostEl.style.top = `${y}px`;
 
-  // Find insertion point
   const rows = Array.from(dragState.listEl.querySelectorAll(':scope > .row'))
-    .filter(el => el !== dragState.rowEl); // original row hidden
+    .filter(el => el !== dragState.rowEl);
   let insertBefore = null;
   const midY = y + dragState.ghostEl.offsetHeight / 2;
 
@@ -206,11 +204,9 @@ async function onUp(e) {
   if (!dragState) return;
   e.preventDefault();
 
-  // Compute new index
   const children = Array.from(dragState.listEl.querySelectorAll(':scope > .row, :scope > .drag-placeholder'));
   const phIndex = children.indexOf(dragState.placeholderEl);
 
-  // Clean up DOM
   dragState.ghostEl.remove();
   dragState.rowEl.style.visibility = '';
   dragState.placeholderEl.remove();
@@ -220,10 +216,8 @@ async function onUp(e) {
 
   if (phIndex < 0) return;
 
-  // Translate DOM index to items index (since we removed original row)
-  const newIndex = phIndex > startIndex ? phIndex : phIndex;
+  const newIndex = phIndex;
 
-  // Reorder items
   const moved = items[startIndex];
   const copy = items.slice();
   copy.splice(startIndex, 1);
@@ -244,7 +238,6 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
   let startClientY = 0;
 
   const beginDrag = () => {
-    // Create ghost and placeholder, hide original row
     const ghost = makeGhost(rowEl);
     const placeholder = makePlaceholder(rowEl);
     rowEl.style.visibility = 'hidden';
@@ -255,7 +248,6 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
     dragState.placeholderEl = placeholder;
     dragState.offsetY = (startClientY + window.scrollY) - (r.top + window.scrollY);
 
-    // Global listeners
     const moveEv = ('ontouchstart' in window) ? 'touchmove' : 'mousemove';
     const upEv   = ('ontouchstart' in window) ? 'touchend'  : 'mouseup';
 
@@ -272,22 +264,17 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
 
   const onPointerDown = (e) => {
     if (locked) return;
-    // Don’t start if a popover is open
     closePopover();
 
     startClientY = (e.touches && e.touches[0] ? e.touches[0].clientY : e.clientY);
 
-    // Initialize dragState shell so move can cancel long-press if needed
     dragState = {
       folderId, items, listEl, rowEl,
       ghostEl: null, placeholderEl: null,
       startIndex: index,
       startY: startClientY,
       offsetY: 0,
-      holdTimer: setTimeout(() => {
-        // Start actual drag after HOLD
-        beginDrag();
-      }, DRAG_HOLD_MS)
+      holdTimer: setTimeout(() => { beginDrag(); }, DRAG_HOLD_MS)
     };
 
     const moveEv = ('ontouchstart' in window) ? 'touchmove' : 'mousemove';
@@ -306,7 +293,6 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
     const _cancelPress = (ev) => {
       if (!dragState) return;
       if (!dragState.ghostEl) {
-        // released before hold completed
         cancelHoldTimer();
         dragState = null;
       }
@@ -317,11 +303,9 @@ function attachDragHandle(handleBtn, listEl, rowEl, folderId, items, index) {
     document.addEventListener(moveEv, _cancelIfMoved, { passive:true });
     document.addEventListener(upEv, _cancelPress, { passive:true });
 
-    // Prevent text selection
     e.preventDefault();
   };
 
-  // Touch + mouse
   handleBtn.addEventListener('touchstart', onPointerDown, { passive:false });
   handleBtn.addEventListener('mousedown',  onPointerDown);
 }
@@ -345,7 +329,7 @@ function startRenameFolder(folderId, folderData, titleSpan) {
   const commit = async () => {
     const newName = (input.value || '').trim();
     const oldName = (folderData.name || '').trim();
-    if (!newName) { cleanup(); return; }
+    if (!newName) { cleanup; return; }
     if (newName === oldName) { cleanup(); return; }
 
     const all = await loadAll();
@@ -479,12 +463,11 @@ function render(data) {
       const row = document.createElement('div');
       row.className = 'row';
 
-      // Main line
       const main = document.createElement('div');
       main.className = 'row-main';
 
       if (!locked) {
-        // Delete item
+        // Delete item (left side)
         const delBtn = document.createElement('button');
         delBtn.textContent = '🗑️';
         delBtn.className = 'delete-btn';
@@ -495,15 +478,6 @@ function render(data) {
           await init();
         });
         main.appendChild(delBtn);
-
-        // DRAG HANDLE (replaces the "Type" button)
-        const handle = document.createElement('button');
-        handle.className = 'drag-handle';
-        handle.title = 'Hold 2s to reorder';
-        handle.setAttribute('aria-label', 'Reorder item (press and hold)');
-        // Visual: small square with 3 bars created in CSS
-        main.appendChild(handle);
-        attachDragHandle(handle, list, row, folderId, items, index);
       }
 
       // Name: input (unlocked) or static (locked)
@@ -524,7 +498,7 @@ function render(data) {
         main.appendChild(nameI);
       }
 
-      // Right side depends on kind + lock
+      // Right-side controls by kind
       if (kind === 'qty') {
         if (locked) {
           const qtyText = document.createElement('span');
@@ -574,7 +548,6 @@ function render(data) {
           chip.textContent = statusActive ? (STATUS_LABEL[statusActive] || statusActive) : '—';
           main.appendChild(chip);
         } else {
-          // Single status picker button (+ dropdown)
           const picker = document.createElement('button');
           picker.className = `status-picker ${statusActive || 'none'}`;
           picker.textContent = statusActive ? STATUS_LABEL[statusActive] : 'Set status';
@@ -626,6 +599,16 @@ function render(data) {
         }
       }
 
+      // DRAG HANDLE ON FAR RIGHT (replaces old Type button spot)
+      if (!locked) {
+        const handle = document.createElement('button');
+        handle.className = 'drag-handle';
+        handle.title = 'Hold 0.25s to reorder';
+        handle.setAttribute('aria-label', 'Reorder item (press and hold)');
+        main.appendChild(handle);              // append LAST so it's on the far right
+        attachDragHandle(handle, list, row, folderId, items, index);
+      }
+
       row.appendChild(main);
       list.appendChild(row);
     };
@@ -642,7 +625,6 @@ addFolderBtn?.addEventListener('click', async () => {
   const clean = name.trim();
   if (!clean) return;
 
-  // Prevent duplicate names
   const all = await loadAll();
   const dup = Object.values(all).some(f => (f?.name || '').trim().toLowerCase() === clean.toLowerCase());
   if (dup) { alert('That folder name is already in use.'); return; }
@@ -672,7 +654,6 @@ toggleLockBtn?.addEventListener('click', () => {
   closePopover();
 });
 
-// Always lock on navigation away
 window.addEventListener('beforeunload', () => {
   locked = true;
   setLockUI();
