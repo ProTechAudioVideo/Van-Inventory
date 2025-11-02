@@ -97,7 +97,7 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 /* ===== Length input and display ===== */
 .len-group { display:flex; align-items:center; gap:4px; }
 .len-input {
-  width:3.8em;              /* a touch wider than qty */
+  width:3.8em;
   text-align:center;
   -moz-appearance:textfield;
   appearance:textfield;
@@ -118,19 +118,7 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 /* Buttons in rows */
 .row button { padding:4px 8px; }
 
-/* ===== Status (unlocked buttons) ===== */
-.status-bar { display:flex; gap:6px; flex-wrap:wrap; padding-left:0; }
-.status-btn {
-  border:1px solid #cbd5e1; background:#f8fafc; color:#0f172a; border-radius:4px;
-  padding:4px 10px; font-size:.8rem;
-}
-.status-btn[aria-pressed="true"] { font-weight:700; }
-.status-btn.full[aria-pressed="true"]  { background:#dcfce7; border-color:#22c55e; color:#14532d; }
-.status-btn.mid[aria-pressed="true"]   { background:#fef9c3; border-color:#eab308; color:#713f12; }
-.status-btn.low[aria-pressed="true"]   { background:#ffedd5; border-color:#f97316; color:#7c2d12; }
-.status-btn.empty[aria-pressed="true"] { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
-
-/* Locked status chips (non-interactive) */
+/* ===== Status: locked chips ===== */
 .status-chip {
   display:inline-block;
   border:1px solid #cbd5e1;
@@ -146,17 +134,22 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 .status-chip.empty { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
 .status-chip.none  { background:#f1f5f9; border-color:#cbd5e1; color:#475569; }
 
-/* Convert/type cycle button (unlocked only) */
-.convert-btn {
-  border:1px dashed #94a3b8;
+/* ===== Status: unlocked single picker button ===== */
+.status-picker {
+  border:1px solid #cbd5e1;
   background:#f8fafc;
-  color:#475569;
+  color:#0f172a;
   border-radius:4px;
-  padding:4px 8px;
-  font-size:.75rem;
+  padding:4px 10px;
+  font-size:.8rem;
 }
+.status-picker.none  { /* default look */ }
+.status-picker.full  { background:#dcfce7; border-color:#22c55e; color:#14532d; }
+.status-picker.mid   { background:#fef9c3; border-color:#eab308; color:#713f12; }
+.status-picker.low   { background:#ffedd5; border-color:#f97316; color:#7c2d12; }
+.status-picker.empty { background:#fee2e2; border-color:#ef4444; color:#991b1b; }
 
-/* ===== Add-item popover ===== */
+/* ===== Add-item & status popover ===== */
 .popover {
   position:absolute;
   z-index:999;
@@ -178,6 +171,17 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
 }
 .popover-item:hover,
 .popover-item:focus { background:#f1f5f9; }
+.popover-item.selected { background:#e2e8f0; }
+
+/* Convert/type cycle button (unlocked only) */
+.convert-btn {
+  border:1px dashed #94a3b8;
+  background:#f8fafc;
+  color:#475569;
+  border-radius:4px;
+  padding:4px 8px;
+  font-size:.75rem;
+}
 
 /* ===== iPhone portrait tweaks ===== */
 @media (max-width: 430px) {
@@ -187,8 +191,7 @@ input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin
   .row-main { gap:6px; }
   input[type="number"] { width:2.35em; padding:6px 4px; }
   .len-input { width:3.4em; padding:6px 4px; }
-  .status-btn { padding:3px 8px; font-size:.75rem; }
 }
 
 /* Guard against phantom overflow */
-.container, .folder, .row, .row-main, .status-bar { max-width:100%; }
+.container, .folder, .row, .row-main { max-width:100%; }
