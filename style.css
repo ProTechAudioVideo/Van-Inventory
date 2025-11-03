@@ -1,5 +1,5 @@
 /style.css
-/* /style.css  (same as last working version, plus final “len-input” override) */
+/* /style.css  (updated with 75/25 row split + iOS zoom fixes + length width) */
 
 * { box-sizing: border-box; }
 html, body { max-width:100%; overflow-x:hidden; }
@@ -14,7 +14,7 @@ button { cursor:pointer; }
 #add-folder, #download-json, #toggle-lock { padding:6px 10px; }
 #toggle-lock { border:1px solid #94a3b8; background:#f1f5f9; border-radius:6px; }
 
-:root { --bay-w: 220px; }
+:root { --bay-w: 220px; }                 /* still used for folder header layout */
 @media (max-width:430px){ :root { --bay-w: 180px; } }
 
 .folder {
@@ -40,9 +40,10 @@ button { cursor:pointer; }
 .folder-items { margin:8px 0 16px 34px; }
 .folder.collapsed + .folder-items { display:none; }
 
+/* ── Item row: 75/25 split ───────────────────────────────────────────────── */
 .row {
   display:grid;
-  grid-template-columns: minmax(0,1fr) var(--bay-w);
+  grid-template-columns: minmax(0, 3fr) clamp(180px, 25%, 260px);  /* ~75% / ~25% */
   gap:8px;
   align-items:center;
   margin:8px 0;
@@ -54,7 +55,7 @@ button { cursor:pointer; }
 
 .control-bay {
   display:grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto;   /* controls, then hamburger */
   align-items:center;
   width:100%;
 }
@@ -82,7 +83,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margi
 /* Locked view badge for length */
 .len-text, .len-value {
   display:inline-block;
-  min-width:5ch;            /* was 11ch; now 5 characters visible */
+  min-width:5ch;            /* 5 characters visible in locked view */
   text-align:center;
   padding:6px 6px;
   border:1px solid #e5e7eb; border-radius:4px; background:#fff;
@@ -123,12 +124,17 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margi
   .caret, .drag-handle{ width:22px; height:22px; }
   .folder-items{ margin-left:18px; }
   input[type="number"]{ width:2.35em; padding:6px 4px; }
+
+  /* Slightly smaller bay on very small screens, but keep 75/25 feel */
+  .row{
+    grid-template-columns: minmax(0, 3fr) clamp(160px, 28%, 220px);
+  }
 }
 
-/* FINAL width override for “ft” input — 5 characters visible */
+/* FINAL width override for “ft” input — 5 characters visible in edit mode */
 .row input[type="number"].len-input {
   flex: 0 0 auto !important;
-  width: 5ch !important;      /* was 11ch */
+  width: 5ch !important;
   max-width: none !important;
   text-align: center;
 }
@@ -137,40 +143,27 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margi
 
 /* --- Page title + banner logo (right-aligned logo) --- */
 .page-header-title {
-  display: flex;           /* was inline-flex */
+  display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;             /* lets the logo ride to the far right */
+  width: 100%;
 }
-
-.page-header-title h1 {
-  margin: 0;
-}
-
+.page-header-title h1 { margin: 0; }
 .logo-banner {
-  margin-left: auto;       /* pushes image to the right edge */
+  margin-left: auto;
   height: 74px;
   width: auto;
   object-fit: contain;
 }
-
 @media (max-width: 430px) {
   .logo-banner { height: 50px; }
 }
 
-
-
 /* iOS Safari: prevent zoom on text-entry controls only (not buttons) */
 @supports (-webkit-touch-callout: none) {
   /* Keep inputs >=16px so iOS doesn't auto-zoom */
-  input, select, textarea {
-    font-size: 16px !important;
-  }
-  .qty-input,
-  .len-input {
-    font-size: 16px !important;
-    line-height: 1.2;
-  }
+  input, select, textarea { font-size: 16px !important; }
+  .qty-input, .len-input { font-size: 16px !important; line-height: 1.2; }
 
   /* Restore smaller fonts for UI buttons */
   #add-folder,
@@ -181,6 +174,6 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margi
   .delete-btn,
   .trash-btn,
   .drag-handle {
-    font-size: 14px !important; /* tune as you like */
+    font-size: 14px !important;
   }
 }
