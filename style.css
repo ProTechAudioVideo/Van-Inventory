@@ -158,16 +158,29 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margi
   .logo-banner { height: 50px; }
 }
 
-/* Prevent iOS Safari from auto-zooming inputs on focus */
+
+
+/* iOS Safari: prevent zoom on text-entry controls only (not buttons) */
 @supports (-webkit-touch-callout: none) {
-  input, select, textarea, button {
+  /* Keep inputs >=16px so iOS doesn't auto-zoom */
+  input, select, textarea {
     font-size: 16px !important;
   }
-
-  /* keep your number fields consistent */
   .qty-input,
   .len-input {
     font-size: 16px !important;
     line-height: 1.2;
+  }
+
+  /* Restore smaller fonts for UI buttons */
+  #add-folder,
+  #download-json,
+  .add-item-btn,
+  .status-picker,
+  .qty-btn,
+  .delete-btn,
+  .trash-btn,
+  .drag-handle {
+    font-size: 14px !important; /* tune as you like */
   }
 }
