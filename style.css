@@ -141,11 +141,11 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margi
 }
 .page-header-title h1 { margin: 0; }
 .logo-banner {
-  height: 36px;           /* banner size on desktop */
+  height: 56px;           /* banner size on desktop */
   width: auto;
   object-fit: contain;
 }
 @media (max-width: 430px) {
-  .logo-banner { height: 28px; }  /* smaller on iPhone portrait */
+  .logo-banner { height: 44px; }  /* smaller on iPhone portrait */
 }
 
