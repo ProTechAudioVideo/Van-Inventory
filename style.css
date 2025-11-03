@@ -135,7 +135,7 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margi
 /* --- Page title + banner logo --- */
 .page-header-title {
   display: inline-flex;
-  align-items: center;
+  align-items: right;
   gap: 12px;              /* space between title and logo */
   flex-wrap: nowrap;
 }
