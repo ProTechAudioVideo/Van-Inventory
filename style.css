@@ -131,3 +131,21 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margi
   text-align: center;
 }
 .len-value { min-width: 11ch !important; }
+
+/* --- Page title + banner logo --- */
+.page-header-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;              /* space between title and logo */
+  flex-wrap: nowrap;
+}
+.page-header-title h1 { margin: 0; }
+.logo-banner {
+  height: 36px;           /* banner size on desktop */
+  width: auto;
+  object-fit: contain;
+}
+@media (max-width: 430px) {
+  .logo-banner { height: 28px; }  /* smaller on iPhone portrait */
+}
+
