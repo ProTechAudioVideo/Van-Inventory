@@ -1,0 +1,32 @@
+<!-- /van-shelves.html -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Van Shelves</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body data-packout="van-shelves">
+  <header>
+    <h1>Van Shelves</h1>
+    <p style="font-size:0.9em;">
+      <a href="packouts.html">Packouts</a> |
+      <a href="inventory.html">Inventory</a>
+    </p>
+  </header>
+
+  <div class="toolbar" role="toolbar" aria-label="Page actions" style="margin:8px 0;">
+    <div class="toolbar-left"></div>
+    <div class="toolbar-right">
+      <button id="add-folder" type="button">+ Add Folder</button>
+      <button id="download-json" type="button">Download JSON</button>
+      <button id="toggle-lock" type="button" aria-pressed="false">Unlock</button>
+    </div>
+  </div>
+
+  <main id="packout-container" role="main" aria-live="polite"></main>
+
+  <script type="module" src="./js/packout.js"></script>
+</body>
+</html>
