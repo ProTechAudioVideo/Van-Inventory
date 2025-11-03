@@ -146,11 +146,11 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margi
 
 .logo-banner {
   margin-left: auto;       /* pushes image to the right edge */
-  height: 84px;
+  height: 94px;
   width: auto;
   object-fit: contain;
 }
 
 @media (max-width: 430px) {
-  .logo-banner { height: 70px; }
+  .logo-banner { height: 80px; }
 }
