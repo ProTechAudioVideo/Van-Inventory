@@ -1,3 +1,4 @@
+/style.css
 /* /style.css  (same as last working version, plus final “len-input” override) */
 
 * { box-sizing: border-box; }
@@ -78,9 +79,10 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margi
 .len-group { display:flex; align-items:center; gap:4px; }
 .unit { font-size:.9rem; color:#334155; margin-left:4px; }
 
+/* Locked view badge for length */
 .len-text, .len-value {
   display:inline-block;
-  min-width:11ch;
+  min-width:5ch;            /* was 11ch; now 5 characters visible */
   text-align:center;
   padding:6px 6px;
   border:1px solid #e5e7eb; border-radius:4px; background:#fff;
@@ -123,14 +125,15 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margi
   input[type="number"]{ width:2.35em; padding:6px 4px; }
 }
 
-/* FINAL width override for “ft” input */
+/* FINAL width override for “ft” input — 5 characters visible */
 .row input[type="number"].len-input {
   flex: 0 0 auto !important;
-  width: 11ch !important;
+  width: 5ch !important;      /* was 11ch */
   max-width: none !important;
   text-align: center;
 }
-.len-value { min-width: 11ch !important; }
+/* Locked view width */
+.len-value { min-width: 5ch !important; }
 
 /* --- Page title + banner logo (right-aligned logo) --- */
 .page-header-title {
