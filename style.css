@@ -177,3 +177,21 @@ input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margi
     font-size: 14px !important;
   }
 }
+
+
+/* === Locked view: give the name field more room (chips unchanged) === */
+.locked .row {
+  /* ~82% name / ~18% bay; bay never smaller than 140px, never larger than 180px */
+  grid-template-columns: minmax(0, 4fr) clamp(140px, 18%, 180px);
+}
+
+/* Reclaim a few pixels by trimming the left indent in locked view */
+.locked .folder-items { margin-left: 22px; }
+
+@media (max-width: 430px) {
+  .locked .row {
+    /* Slightly different bounds on very small screens */
+    grid-template-columns: minmax(0, 4fr) clamp(130px, 20%, 160px);
+  }
+  .locked .folder-items { margin-left: 12px; }
+}
